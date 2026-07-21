@@ -1,0 +1,4 @@
+interface:
+  display_name: "明日方舟 Schema 更新校验"
+  short_description: "检查游戏更新后的类型变化并输出受影响的 JSON 文件清单"
+  default_prompt: "使用 $arknights-schema-check-updates 检查游戏数据更新后的类型变化并汇总受影响 JSON 文件。"

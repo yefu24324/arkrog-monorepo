@@ -1,0 +1,17 @@
+node_modules
+.pnpm-store
+
+# IDE
+.idea
+.vscode
+
+# OS
+.DS_Store
+Thumbs.db
+
+# env
+.env
+.env.*
+
+# docs 脚本产出（按主题拆表结果，可再生成）
+docs/game/_extracted/

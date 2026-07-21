@@ -1,0 +1,16 @@
+{
+  "name": "arkrog-monorepo",
+  "private": true,
+  "packageManager": "pnpm@11.2.2",
+  "scripts": {
+    "game:split-topic": "pnpm --filter @arkrog/docs split-topic",
+    "schema:bootstrap": "pnpm --filter @arkrog/arknights-schema data:bootstrap",
+    "schema:generate": "pnpm schema:bootstrap",
+    "schema:analyze": "pnpm --filter @arkrog/arknights-schema data:analyze",
+    "schema:inspect": "pnpm --filter @arkrog/arknights-schema data:inspect",
+    "schema:validate": "pnpm --filter @arkrog/arknights-schema data:validate",
+    "schema:docs:generate": "pnpm --filter @arkrog/arknights-schema-docs docs:generate",
+    "schema:docs:dev": "pnpm --filter @arkrog/arknights-schema-docs dev",
+    "schema:docs:build": "pnpm --filter @arkrog/arknights-schema-docs build"
+  }
+}

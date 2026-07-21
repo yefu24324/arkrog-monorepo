@@ -1,0 +1,4 @@
+interface:
+  display_name: "明日方舟 JSON 类型分析"
+  short_description: "对指定游戏 JSON 执行全量结构分析并定位 Schema 差异"
+  default_prompt: "使用 $arknights-schema-analyze-json 分析指定游戏 JSON 与当前 Schema 的结构差异。"

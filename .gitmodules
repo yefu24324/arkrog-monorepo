@@ -1,0 +1,9 @@
+[submodule "arkrog_frontend"]
+	path = arkrog_frontend
+	url = git@github.com/philimao/arkrog_frontend.git
+[submodule "arkrog_backend"]
+	path = arkrog_backend
+	url = git@github.com:philimao/arkrog_backend.git
+[submodule "ArknightsGameData"]
+	path = ArknightsGameData
+	url = git@github.com:Kengxxiao/ArknightsGameData.git

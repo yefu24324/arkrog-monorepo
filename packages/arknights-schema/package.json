@@ -1,0 +1,46 @@
+{
+  "name": "@arkrog/arknights-schema",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/types/index.js"
+    },
+    "./schemas": {
+      "types": "./dist/schemas/index.d.ts",
+      "import": "./dist/schemas/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "docs",
+    "TODO.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "data:bootstrap": "tsx tools/generate-roguelike-topic.ts --initial",
+    "data:generate": "pnpm data:bootstrap",
+    "data:analyze": "tsx tools/analyze-json.ts",
+    "data:inspect": "tsx tools/analyze-json.ts --all",
+    "data:validate": "tsx tools/validate-roguelike-topic.ts",
+    "docs:check": "tsx tools/check-docs.ts"
+  },
+  "dependencies": {
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "quicktype-core": "^23.2.6",
+    "tsx": "^4.19.4",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.4"
+  }
+}

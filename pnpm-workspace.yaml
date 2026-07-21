@@ -1,0 +1,14 @@
+packages:
+  - arkrog_frontend
+  - docs
+  - packages/*
+
+# 仅将 frontend 纳入依赖管理；backend 暂不加入。
+# docs 包承载游戏数据文档与分析脚本，packages 目录承载可复用内部库。
+
+# 继承自 arkrog_frontend 的构建脚本白名单（pnpm 11）
+allowBuilds:
+  "@heroui/shared-utils": true
+  cos-js-sdk-v5: true
+  esbuild: true
+  sharp: true

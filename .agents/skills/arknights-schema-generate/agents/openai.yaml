@@ -1,0 +1,4 @@
+interface:
+  display_name: "明日方舟 Schema 生成"
+  short_description: "首次全量初始化或按差异报告局部维护游戏数据类型"
+  default_prompt: "使用 $arknights-schema-generate 为指定 JSON 首次初始化 Schema，或根据分析报告局部更新已有类型。"
