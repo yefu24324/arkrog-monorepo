@@ -11,4 +11,6 @@ allowBuilds:
   "@heroui/shared-utils": true
   cos-js-sdk-v5: true
   esbuild: true
+  # Kuzu 的 Node.js 驱动需要执行本机二进制安装脚本。
+  kuzu: true
   sharp: true

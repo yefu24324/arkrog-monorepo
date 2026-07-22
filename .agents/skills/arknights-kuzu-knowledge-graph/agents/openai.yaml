@@ -1,0 +1,4 @@
+interface:
+  display_name: "明日方舟 Kuzu 知识图谱"
+  short_description: "构建并查询藏品黑板、战斗组件与伤害乘区的可追溯图谱"
+  default_prompt: "使用 $arknights-kuzu-knowledge-graph 查询藏品 buff 黑板最终进入的伤害乘区，并给出证据路径。"

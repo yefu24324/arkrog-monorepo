@@ -4,6 +4,13 @@
   "packageManager": "pnpm@11.2.2",
   "scripts": {
     "game:split-topic": "pnpm --filter @arkrog/docs split-topic",
+    "graph:ask": "pnpm --filter @arkrog/arknights-knowledge-graph graph:ask",
+    "graph:build": "pnpm --filter @arkrog/arknights-knowledge-graph graph:build",
+    "graph:cypher": "pnpm --filter @arkrog/arknights-knowledge-graph graph:cypher",
+    "graph:export": "pnpm --filter @arkrog/arknights-knowledge-graph graph:export",
+    "graph:test": "pnpm --filter @arkrog/arknights-knowledge-graph test",
+    "graph:trace": "pnpm --filter @arkrog/arknights-knowledge-graph graph:trace",
+    "graph:typecheck": "pnpm --filter @arkrog/arknights-knowledge-graph typecheck",
     "schema:bootstrap": "pnpm --filter @arkrog/arknights-schema data:bootstrap",
     "schema:generate": "pnpm schema:bootstrap",
     "schema:analyze": "pnpm --filter @arkrog/arknights-schema data:analyze",

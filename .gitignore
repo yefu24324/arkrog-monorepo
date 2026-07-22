@@ -15,3 +15,6 @@ Thumbs.db
 
 # docs 脚本产出（按主题拆表结果，可再生成）
 docs/game/_extracted/
+
+# Kuzu 本地数据库由 GameData、schema 与人工文档随时重建。
+.data/
