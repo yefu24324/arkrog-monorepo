@@ -7,6 +7,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import {
+  FormulaContext,
+  applyRelicItemsToFormulaContext,
+  evaluateDamageFormula,
+  type DamageFormulaId,
+  type FormulaActivationContext,
+  type RelicItemForContribution,
+} from '@arkrog/arknights-knowledge-graph/formula';
+import {
   FormulaResultPopover,
   buildAttackSpeedExpr,
   buildNamedFormulaExpr,
@@ -14,16 +22,7 @@ import {
   type FormulaExprNode,
 } from '@/components/formula-expr-popover';
 import { cn } from '@/lib/cn';
-import {
-  createFormulaContext,
-  evaluateFormula,
-  loadFormulaBook,
-  type FormulaBookData,
-} from '@/lib/formula-runtime';
-import {
-  buildRelicContributions,
-  type RelicItemForContribution,
-} from '@/lib/relic-contributions';
+import { loadFormulaBook, type FormulaBookData } from '@/lib/formula-runtime';
 
 /** 干员目录条目。 */
 export interface OperatorIndexEntry {
@@ -41,6 +40,9 @@ export interface OperatorDetail {
   rarity: string;
   phase: number;
   level: number;
+  subProfessionId: string | null;
+  position: string | null;
+  hasToken: boolean;
   attributes: Record<string, unknown>;
 }
 
@@ -58,6 +60,7 @@ export interface EnemyDetail {
   prefabKey: string;
   level: number;
   attributes: Record<string, unknown>;
+  enemyData: Record<string, unknown>;
 }
 
 interface CombatPreviewPanelProps {
@@ -74,6 +77,48 @@ function attrNumber(
 ): number {
   const value = attributes?.[key];
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+/** 从完整敌人数据安全读取字符串。 */
+function recordString(record: Record<string, unknown> | undefined, key: string): string | undefined {
+  const value = record?.[key];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+/** 从完整敌人数据安全读取字符串数组。 */
+function recordStringArray(
+  record: Record<string, unknown> | undefined,
+  key: string,
+): string[] | undefined {
+  const value = record?.[key];
+  if (!Array.isArray(value)) return undefined;
+  return value.filter((entry): entry is string => typeof entry === 'string');
+}
+
+/** 把当前选择转换为 graph 藏品生效判定上下文。 */
+function buildActivationContext(
+  selectedRelics: readonly RelicItemForContribution[],
+  operator: OperatorDetail | null,
+  enemy: EnemyDetail | null,
+): FormulaActivationContext {
+  return {
+    selectedRelicIds: selectedRelics.map((relic) => relic.id),
+    character: operator
+      ? {
+          profession: operator.profession,
+          subProfessionId: operator.subProfessionId ?? undefined,
+          position: operator.position ?? undefined,
+          hasToken: operator.hasToken,
+        }
+      : undefined,
+    enemy: enemy
+      ? {
+          id: enemy.id,
+          levelType: recordString(enemy.enemyData, 'levelType'),
+          tags: recordStringArray(enemy.enemyData, 'enemyTags'),
+        }
+      : undefined,
+  };
 }
 
 /** 格式化展示数值。 */
@@ -239,9 +284,9 @@ function AttrRow({
 
 /** 安全构建命名公式展示树。 */
 function safeNamedExpr(
-  formulaId: string,
+  formulaId: DamageFormulaId,
   book: FormulaBookData,
-  context: ReturnType<typeof createFormulaContext>,
+  context: FormulaContext,
   inputs: Record<string, number>,
 ): FormulaExprNode | null {
   try {
@@ -357,15 +402,12 @@ export function CombatPreviewPanel({
   /** 由多选藏品构建公式上下文并求核心属性。 */
   const computed = useMemo(() => {
     if (!formulaBook) return null;
-    const contributions = buildRelicContributions(selectedRelics);
-    const context = createFormulaContext(formulaBook);
-    for (const contribution of contributions) {
-      try {
-        context.addContribution(contribution);
-      } catch {
-        // 重复 ID 时跳过，避免整面板崩溃。
-      }
-    }
+    const context = new FormulaContext();
+    // graph 程序统一完成乘区写入和生效判定，inactive 贡献保留来源但不参与求值。
+    const contributions = applyRelicItemsToFormulaContext(context, selectedRelics, {
+      // 定向 charBuffData 默认赋给当前选择的干员，graph 仅继续校验职业等条件。
+      activation: buildActivationContext(selectedRelics, operator, enemy),
+    });
 
     const atk0 = operator ? attrNumber(operator.attributes, 'atk') : null;
     const charHp0 = operator ? attrNumber(operator.attributes, 'maxHp') : null;
@@ -395,35 +437,35 @@ export function CombatPreviewPanel({
 
     try {
       if (atk0 !== null) {
-        finalAtk = evaluateFormula('FINAL_ATK', formulaBook, context, { ATK0: atk0 });
+        finalAtk = evaluateDamageFormula('FINAL_ATK', context, { ATK0: atk0 });
       }
       if (charHp0 !== null) {
-        finalCharHp = evaluateFormula('FINAL_CHAR_HP', formulaBook, context, {
+        finalCharHp = evaluateDamageFormula('FINAL_CHAR_HP', context, {
           CHAR_HP0: charHp0,
         });
       }
       if (charDef0 !== null) {
-        finalCharDef = evaluateFormula('FINAL_CHAR_DEF', formulaBook, context, {
+        finalCharDef = evaluateDamageFormula('FINAL_CHAR_DEF', context, {
           CHAR_DEF0: charDef0,
         });
       }
       if (charRes0 !== null) {
-        finalCharRes = evaluateFormula('FINAL_CHAR_RES', formulaBook, context, {
+        finalCharRes = evaluateDamageFormula('FINAL_CHAR_RES', context, {
           CHAR_RES0: charRes0,
         });
       }
       if (def0 !== null) {
-        effectiveDef = evaluateFormula('EFFECTIVE_DEF', formulaBook, context, {
+        effectiveDef = evaluateDamageFormula('EFFECTIVE_DEF', context, {
           DEF0: def0,
         });
       }
       if (res0 !== null) {
-        effectiveRes = evaluateFormula('EFFECTIVE_RES', formulaBook, context, {
+        effectiveRes = evaluateDamageFormula('EFFECTIVE_RES', context, {
           RES0: res0,
         });
       }
       if (hp0 !== null) {
-        finalHp = evaluateFormula('ENEMY_MAX_HP', formulaBook, context, { HP0: hp0 });
+        finalHp = evaluateDamageFormula('ENEMY_MAX_HP', context, { HP0: hp0 });
       }
     } catch {
       // 缺少输入时保持 null。
@@ -448,6 +490,7 @@ export function CombatPreviewPanel({
       hp0,
       finalHp,
       contributionCount: contributions.length,
+      activeContributionCount: contributions.filter((entry) => entry.active).length,
       expressions: {
         charHp:
           charHp0 !== null
@@ -503,13 +546,15 @@ export function CombatPreviewPanel({
         <div>
           <h2 className="text-base font-semibold">战斗属性预览</h2>
           <p className="mt-0.5 text-sm text-fd-muted-foreground">
-            选择干员与敌人，多选藏品后重算属性；点击结果数值可查看真实计算公式
+            选择干员与敌人，多选藏品后重算属性；定向装备默认赋给当前干员
           </p>
         </div>
         <p className="text-xs text-fd-muted-foreground">
           已选 {selectedRelics.length} 件藏品
-          {computed ? ` · ${computed.contributionCount} 条贡献` : ''}
-          <span className="ml-2 text-fd-muted-foreground/80">未校验生效条件</span>
+          {computed
+            ? ` · ${computed.activeContributionCount}/${computed.contributionCount} 条贡献生效`
+            : ''}
+          <span className="ml-2 text-fd-muted-foreground/80">graph 运行时判定</span>
         </p>
       </div>
 

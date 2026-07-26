@@ -22,6 +22,9 @@ export * from "./activation.js";
 /** 导出藏品黑板 → 公式贡献映射（复用 classify 预测）。 */
 export * from "./relic-contributions.js";
 
+/** 导出按战斗模板和通用语义规则分派的藏品公式程序。 */
+export * from "./relic-template-programs.js";
+
 /** 导出藏品路由与写入公式簿的组合程序。 */
 export * from "./relic-programs.js";
 

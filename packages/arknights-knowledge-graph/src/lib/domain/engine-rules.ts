@@ -51,7 +51,8 @@ export type EngineRuleCondition =
   | { kind: "parameterKeyMatches"; pattern: string }
   | { kind: "parameterNumber"; key: string; operator: "lt" | "lte" | "gt" | "gte" | "eq"; value: number }
   | { kind: "mechanicContains"; values: string[] }
-  | { kind: "actionMatches"; componentType?: string; attributeType?: string; formulaItem?: string; target?: string };
+  | { kind: "actionMatches"; componentType?: string; attributeType?: string; formulaItem?: string; target?: string }
+  | { kind: "actionNotMatches"; componentType?: string; attributeType?: string; formulaItem?: string; target?: string };
 
 /** 可版本化的战斗引擎语义规则。 */
 export interface EngineSemanticRule {
@@ -193,7 +194,7 @@ export const ENGINE_SEMANTIC_RULES: EngineSemanticRule[] = [
   },
   {
     id: "char-def-runtime-multiplier",
-    version: 1,
+    version: 2,
     name: "战斗内条件防御属性",
     description: "由战斗事件、层数或角色能力写入的正向 def multiplier 进入局内防御区。",
     zoneId: "INNER_CHAR_DEF",
@@ -203,9 +204,24 @@ export const ENGINE_SEMANTIC_RULES: EngineSemanticRule[] = [
       { kind: "hasParameter", keys: ["def"] },
       // 排除 enemy_def_down 等负向敌方防御修改。
       { kind: "parameterNumber", key: "def", operator: "gte", value: 0 },
+      // Action 已明确声明点数直加时，不能再按 global_buff 名称猜成百分比倍率。
+      { kind: "actionNotMatches", componentType: "CreateBuff", attributeType: "DEF", formulaItem: "ADDITION", target: "BUFF_OWNER" },
     ],
     any: [
       { kind: "effectKeyContains", values: ["layer_", "ability", "global_buff"] },
+    ],
+  },
+  {
+    id: "char-def-runtime-flat-addition",
+    version: 1,
+    name: "战斗内干员防御点数直加",
+    description: "战斗模板对 buff 持有者执行 DEF ADDITION 时进入干员防御直加区。",
+    zoneId: "FLAT_CHAR_DEF",
+    status: "verified",
+    confidence: 1,
+    all: [
+      { kind: "parameterNumber", key: "def", operator: "gte", value: 0 },
+      { kind: "actionMatches", componentType: "CreateBuff", attributeType: "DEF", formulaItem: "ADDITION", target: "BUFF_OWNER" },
     ],
   },
   {
@@ -236,7 +252,7 @@ export const ENGINE_SEMANTIC_RULES: EngineSemanticRule[] = [
   },
   {
     id: "char-res-runtime-multiplier",
-    version: 1,
+    version: 2,
     name: "战斗内条件法抗属性",
     description: "由战斗事件、层数或角色能力写入的正向 magic_resistance multiplier 进入局内法抗区。",
     zoneId: "INNER_CHAR_RES",
@@ -246,9 +262,24 @@ export const ENGINE_SEMANTIC_RULES: EngineSemanticRule[] = [
       { kind: "hasParameter", keys: ["magic_resistance"] },
       // 排除目标法抗点数直减等负向敌方修改。
       { kind: "parameterNumber", key: "magic_resistance", operator: "gte", value: 0 },
+      // Action 已明确声明点数直加时，不能再按 global_buff 名称猜成百分比倍率。
+      { kind: "actionNotMatches", componentType: "CreateBuff", attributeType: "MAGIC_RESISTANCE", formulaItem: "ADDITION", target: "BUFF_OWNER" },
     ],
     any: [
       { kind: "effectKeyContains", values: ["layer_", "ability", "global_buff"] },
+    ],
+  },
+  {
+    id: "char-res-runtime-flat-addition",
+    version: 1,
+    name: "战斗内干员法抗点数直加",
+    description: "战斗模板对 buff 持有者执行 MAGIC_RESISTANCE ADDITION 时进入干员法抗直加区。",
+    zoneId: "FLAT_CHAR_RES",
+    status: "verified",
+    confidence: 1,
+    all: [
+      { kind: "parameterNumber", key: "magic_resistance", operator: "gte", value: 0 },
+      { kind: "actionMatches", componentType: "CreateBuff", attributeType: "MAGIC_RESISTANCE", formulaItem: "ADDITION", target: "BUFF_OWNER" },
     ],
   },
   {
@@ -447,6 +478,19 @@ export function extractMechanicActionFacts(
   return facts;
 }
 
+/** 判断一条 Action 是否满足属性、算法和目标约束。 */
+function actionMatchesCondition(
+  action: MechanicActionFact,
+  condition: Extract<EngineRuleCondition, { kind: "actionMatches" | "actionNotMatches" }>,
+): boolean {
+  return (
+    (!condition.componentType || action.componentType === condition.componentType) &&
+    (!condition.attributeType || action.attributeType === condition.attributeType) &&
+    (!condition.formulaItem || action.formulaItem === condition.formulaItem) &&
+    (!condition.target || action.targetType === condition.target || action.buffOwner === condition.target)
+  );
+}
+
 /** 判断单条声明式条件是否命中。 */
 function conditionMatches(condition: EngineRuleCondition, facts: EngineEffectFacts): boolean {
   const effectKey = facts.effectKey.toLowerCase();
@@ -476,12 +520,9 @@ function conditionMatches(condition: EngineRuleCondition, facts: EngineEffectFac
     case "mechanicContains":
       return condition.values.some((value) => mechanicName.includes(value.toLowerCase()));
     case "actionMatches":
-      return facts.actions.some((action) =>
-        (!condition.componentType || action.componentType === condition.componentType) &&
-        (!condition.attributeType || action.attributeType === condition.attributeType) &&
-        (!condition.formulaItem || action.formulaItem === condition.formulaItem) &&
-        (!condition.target || action.targetType === condition.target || action.buffOwner === condition.target),
-      );
+      return facts.actions.some((action) => actionMatchesCondition(action, condition));
+    case "actionNotMatches":
+      return facts.actions.every((action) => !actionMatchesCondition(action, condition));
   }
 }
 
@@ -491,10 +532,7 @@ function matchingActionPaths(rule: EngineSemanticRule, facts: EngineEffectFacts)
     .filter((condition): condition is Extract<EngineRuleCondition, { kind: "actionMatches" }> => condition.kind === "actionMatches");
   return facts.actions
     .filter((action) => actionConditions.some((condition) =>
-      (!condition.componentType || action.componentType === condition.componentType) &&
-      (!condition.attributeType || action.attributeType === condition.attributeType) &&
-      (!condition.formulaItem || action.formulaItem === condition.formulaItem) &&
-      (!condition.target || action.targetType === condition.target || action.buffOwner === condition.target),
+      actionMatchesCondition(action, condition),
     ))
     .map((action) => action.jsonPath);
 }

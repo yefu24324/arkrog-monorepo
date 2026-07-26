@@ -970,6 +970,12 @@ interface OperatorDetail {
   rarity: string;
   phase: number;
   level: number;
+  /** graph 职业选择器使用的子职业 ID。 */
+  subProfessionId: string | null;
+  /** graph 部署位选择器使用的近战/远程位置。 */
+  position: string | null;
+  /** graph token 选择器使用的召唤物标记。 */
+  hasToken: boolean;
   attributes: Record<string, unknown>;
 }
 
@@ -987,6 +993,9 @@ function writeOperatorCatalog(): number {
       profession?: string;
       rarity?: string;
       isNotObtainable?: boolean;
+      subProfessionId?: string | null;
+      position?: string | null;
+      displayTokenDict?: Record<string, unknown> | null;
       phases?: Array<{
         attributesKeyFrames?: Array<{ level?: number; data?: Record<string, unknown> }>;
       }>;
@@ -1014,6 +1023,9 @@ function writeOperatorCatalog(): number {
       rarity,
       phase: phaseIndex,
       level: frame.level ?? 0,
+      subProfessionId: character.subProfessionId ?? null,
+      position: character.position ?? null,
+      hasToken: Boolean(character.displayTokenDict),
       attributes: { ...frame.data },
     };
     fs.writeFileSync(

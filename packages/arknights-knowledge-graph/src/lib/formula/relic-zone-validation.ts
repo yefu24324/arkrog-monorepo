@@ -135,6 +135,7 @@ export function buildFormulaRelicZoneValidationArtifact(
     sources: [
       ...classified.sources,
       "packages/arknights-knowledge-graph/src/lib/formula/relic-contributions.ts",
+      "packages/arknights-knowledge-graph/src/lib/formula/relic-template-programs.ts",
     ],
     coverage: {
       verifiedEffectCount: 0,

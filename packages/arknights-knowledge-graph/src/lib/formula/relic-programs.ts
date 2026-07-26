@@ -41,6 +41,26 @@ export interface RelicBuffZoneRoute {
 export interface ApplyRelicProgramOptions {
   /** 运行时生效上下文；存在选择器却缺少对应上下文时会保守判为不生效。 */
   activation?: FormulaActivationContext;
+  /** 由稳定进阶券 ID 推导、仅用于 charBuffData 的隐式职业限制。 */
+  recipientProfession?: string;
+}
+
+/** 从“立即进阶职业”奖励券稳定 ID 推导装备受赠者职业。 */
+function inferRecipientProfession(item: RelicItemForContribution): string | undefined {
+  for (const effect of item.effects) {
+    if (effect.source !== "relics" || effect.key !== "immediate_reward") continue;
+    const rewardId = effect.blackboard.find((entry) => entry.key === "id")?.valueStr;
+    const matched = rewardId?.match(/_upgrade_ticket_([a-z]+)_from_relic$/);
+    if (matched?.[1]) return matched[1];
+  }
+  return undefined;
+}
+
+/** 判断效果是否来自赋给当前预览干员的 charBuffData。 */
+function isCharacterBuffEffect(
+  effect: ExportedRelicEffect | RelicItemForContribution["effects"][number],
+): boolean {
+  return effect.source?.startsWith("charBuffData:") ?? false;
 }
 
 /** CalcCenter 可直接传入的单件藏品最小结构。 */
@@ -99,9 +119,20 @@ export function applyClassifiedEffectToFormulaContext(
 ): FormulaContribution[] {
   const contributionEffect =
     "classification" in effect ? toContributionEffect(effect) : effect;
+  // 新典训的职业限制编码在直接奖励券 ID，而不在 charBuffData 黑板中；仅用于生效判定补齐选择器。
+  const activationBlackboard = options.recipientProfession
+    ? [
+        ...contributionEffect.blackboard,
+        {
+          key: "selector.profession",
+          value: 0,
+          valueStr: options.recipientProfession,
+        },
+      ]
+    : contributionEffect.blackboard;
   const activationResult = evaluateBuffActivation(
     contributionEffect.key,
-    contributionEffect.blackboard,
+    activationBlackboard,
     options.activation ?? {},
   );
   const contributions = contributionsFromClassifiedEffect(item, contributionEffect, {
@@ -164,9 +195,15 @@ export function applyRelicItemsToFormulaContext(
 ): FormulaContribution[] {
   const applied: FormulaContribution[] = [];
   for (const item of items) {
+    // 同一件新典训的 charBuffData 共享直接奖励中编码的职业约束。
+    const requiredProfession = inferRecipientProfession(item);
     for (const effect of item.effects) {
       applied.push(
-        ...applyClassifiedEffectToFormulaContext(context, item, effect, options),
+        ...applyClassifiedEffectToFormulaContext(context, item, effect, {
+          ...options,
+          // 文档预览默认当前干员就是受赠者，仅对职业新典训补充职业校验。
+          recipientProfession: isCharacterBuffEffect(effect) ? requiredProfession : undefined,
+        }),
       );
     }
   }

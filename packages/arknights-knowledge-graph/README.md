@@ -43,11 +43,13 @@ evaluateDamageFormula("FINAL_ATK", context, { ATK0: 100 });
 ```
 
 - **路由** `routeRelicBuffToZones`：buff → 乘区（与是否生效正交）
+- **模板程序** `runRelicFormulaProgram`：已注册战斗模板使用独立函数解释参数、目标和乘区；未注册模板才回退到明确的通用语义规则
 - **生效** `evaluateBuffActivation`：读黑板 `reliance_relics` / 敌人 ID、排除、等级与标签 / 职业、子职业与部署位 / 关卡选择器
+- **受赠者** 文档预览默认当前干员收到 `charBuffData`；职业新典训会从进阶券稳定 ID 额外校验职业
 - **批量** `applyRelicBuffsToFormulaContext`：一次处理 CalcCenter 的 `selectedRelics`，并从同一列表推导 `reliance_relics` 依赖集合
 - **写入** 贡献可 `active=false`（保留记录与原因，公式簿求值自动跳过）
 
-实现：`src/lib/formula/activation.ts`、`relic-programs.ts`、`relic-contributions.ts`。
+实现：`src/lib/formula/activation.ts`、`relic-programs.ts`、`relic-contributions.ts`、`relic-template-programs.ts`。
 
 ## 命令
 

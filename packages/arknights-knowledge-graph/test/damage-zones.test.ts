@@ -158,6 +158,33 @@ describe("可更新战斗引擎语义规则", () => {
     expect(predictions.every((prediction) => !prediction.evidencePath.includes("docs/game"))).toBe(true);
   });
 
+  it("对古堡的子嗣按 ADDITION 解释防御与法抗点数直加", () => {
+    const expectation = fixture.cases.find((candidate) => candidate.itemId === "rogue_6_relic_legacy_63");
+    expect(expectation).toBeDefined();
+    if (!expectation) return;
+    const buff = topicData.details[expectation.topicId]?.relics[expectation.sourceId]?.buffs?.[expectation.buffIndex];
+    expect(buff).toBeDefined();
+    if (!buff) return;
+    const parameters = parameterMap(buff.blackboard);
+    const mechanicName = String(parameters.get("key") ?? "");
+    const actions = extractMechanicActionFacts(templates[mechanicName], `$[${JSON.stringify(mechanicName)}]`);
+    const predictions = predictEngineZones({
+      effectKey: buff.key,
+      parameters,
+      mechanicName,
+      actions,
+      sourceKind: "relics",
+      jsonPath: expectation.effectPath,
+    });
+    // ADDITION 必须只进入点数直加区，不能再残留 global_buff 推断出的倍率区。
+    expect(predictions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ ruleId: "char-def-runtime-flat-addition", zoneId: "FLAT_CHAR_DEF", status: "verified" }),
+      expect.objectContaining({ ruleId: "char-res-runtime-flat-addition", zoneId: "FLAT_CHAR_RES", status: "verified" }),
+    ]));
+    expect(predictions.some((prediction) => prediction.zoneId === "INNER_CHAR_DEF")).toBe(false);
+    expect(predictions.some((prediction) => prediction.zoneId === "INNER_CHAR_RES")).toBe(false);
+  });
+
   it("证据不足时保持未知，不用字段名强行产生乘区", () => {
     const predictions = predictEngineZones({
       effectKey: "immediate_reward",

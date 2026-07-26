@@ -14,14 +14,15 @@ import {
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { cn } from '@/lib/cn';
 import type {
-  FormulaBookData,
+  FormulaContext,
   FormulaContribution,
+  FormulaDamageType,
   FormulaExpression,
   FormulaInputs,
-  FormulaContext,
-} from '@/lib/formula-runtime';
+} from '@arkrog/arknights-knowledge-graph/formula';
+import { cn } from '@/lib/cn';
+import type { FormulaBookData } from '@/lib/formula-runtime';
 
 /** 展示用表达式叶节点：带 tooltip 的数值。 */
 export interface FormulaLiteralNode {
@@ -64,10 +65,10 @@ function contributionTooltip(entry: FormulaContribution): string {
 
 /** 从乘区聚合规则与贡献构建展示树。 */
 function buildZoneExpr(
-  zoneId: string,
+  zoneId: FormulaContribution['zoneId'],
   book: FormulaBookData,
   context: FormulaContext,
-  damageType?: 'physical' | 'magical' | 'pure' | 'elemental',
+  damageType?: FormulaDamageType,
 ): FormulaExprNode {
   const zone = book.zones.find((entry) => entry.id === zoneId);
   const contributions = context.getContributions(zoneId, { damageType });
