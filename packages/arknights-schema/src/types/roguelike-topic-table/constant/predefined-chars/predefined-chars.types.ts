@@ -7,7 +7,7 @@
 /**
  * roguelike_topic_table.json 中 PredefinedChar 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface PredefinedChar {
   /** 原始数据字段 `charId`。 */
@@ -23,6 +23,6 @@ export interface PredefinedChar {
 /**
  * roguelike_topic_table.json 中 RecruitType 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type RecruitType = "FREE" | "THIRD_LOW" | "THIRD";

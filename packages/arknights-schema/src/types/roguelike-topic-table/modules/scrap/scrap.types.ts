@@ -11,7 +11,7 @@ import type { Rogue6_ScrapM01_Enum } from "../../shared/rogue-enums.types.js";
 /**
  * roguelike_topic_table.json 中 GoodsScrapDatum 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface GoodsScrapDatum {
   /** 原始数据字段 `scrapId`。 */
@@ -25,7 +25,7 @@ export interface GoodsScrapDatum {
 /**
  * roguelike_topic_table.json 中 Grid 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Grid {
   /** 原始数据字段 `row`。 */
@@ -37,7 +37,7 @@ export interface Grid {
 /**
  * roguelike_topic_table.json 中 ModuleScrap 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ModuleScrap {
   /** 原始数据字段 `scrapItemToType`。 */
@@ -59,7 +59,7 @@ export interface ModuleScrap {
 /**
  * roguelike_topic_table.json 中 MoveScrapDatum 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface MoveScrapDatum {
   /** 原始数据字段 `count`。 */
@@ -85,7 +85,7 @@ export interface MoveScrapDatum {
 /**
  * roguelike_topic_table.json 中 MoveScrapRangeData 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface MoveScrapRangeData {
   /** 原始数据字段 `r-1`。 */
@@ -107,7 +107,7 @@ export interface MoveScrapRangeData {
 /**
  * roguelike_topic_table.json 中 PassiveScrapDatum 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface PassiveScrapDatum {
   /** 原始数据字段 `node`。 */
@@ -125,7 +125,7 @@ export interface PassiveScrapDatum {
 /**
  * roguelike_topic_table.json 中 R1 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface R1 {
   /** 原始数据字段 `id`。 */
@@ -139,14 +139,14 @@ export interface R1 {
 /**
  * roguelike_topic_table.json 中 RangeType 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type RangeType = "RANGE" | "FULL_MAP";
 
 /**
  * roguelike_topic_table.json 中 ScrapItemToType 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ScrapItemToType {
   /** 原始数据字段 `rogue_6_scrap_M_01`。 */
@@ -214,7 +214,7 @@ export interface ScrapItemToType {
 /**
  * roguelike_topic_table.json 中 ScrapModuleConsts 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ScrapModuleConsts {
   /** 原始数据字段 `identifyScrapId`。 */
@@ -224,7 +224,7 @@ export interface ScrapModuleConsts {
 /**
  * roguelike_topic_table.json 中 ScrapTypeData 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ScrapTypeData {
   /** 原始数据字段 `GOODS`。 */

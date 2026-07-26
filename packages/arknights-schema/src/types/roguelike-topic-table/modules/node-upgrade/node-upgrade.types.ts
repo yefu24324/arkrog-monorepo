@@ -7,7 +7,7 @@
 /**
  * roguelike_topic_table.json 中 Alchemy 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Alchemy {
   /** 原始数据字段 `nodeType`。 */
@@ -23,21 +23,21 @@ export interface Alchemy {
 /**
  * roguelike_topic_table.json 中 AlchemyNodeType 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type AlchemyNodeType = "ALCHEMY" | "BATTLE_SHOP" | "REST";
 
 /**
  * roguelike_topic_table.json 中 CostItemId 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type CostItemId = "rogue_4_fragment_I_1";
 
 /**
  * roguelike_topic_table.json 中 NodeUpgrade 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface NodeUpgrade {
   /** 原始数据字段 `nodeUpgradeDataMap`。 */
@@ -47,7 +47,7 @@ export interface NodeUpgrade {
 /**
  * roguelike_topic_table.json 中 NodeUpgradeDataMap 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface NodeUpgradeDataMap {
   /** 原始数据字段 `REST`。 */
@@ -61,7 +61,7 @@ export interface NodeUpgradeDataMap {
 /**
  * roguelike_topic_table.json 中 PermItemList 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface PermItemList {
   /** 原始数据字段 `upgradeId`。 */
@@ -83,7 +83,7 @@ export interface PermItemList {
 /**
  * roguelike_topic_table.json 中 TempItemList 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface TempItemList {
   /** 原始数据字段 `upgradeId`。 */

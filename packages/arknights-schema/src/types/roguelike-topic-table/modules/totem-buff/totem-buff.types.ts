@@ -11,21 +11,21 @@ import type { Pos } from "../../shared/core.types.js";
 /**
  * roguelike_topic_table.json 中 BgIconId 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type BgIconId = "bg_all" | "bg_blue" | "bg_green" | "bg_red" | "bg_boss";
 
 /**
  * roguelike_topic_table.json 中 BlurNodeType 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type BlurNodeType = "BATTLE" | "NO_BATTLE" | "NONE";
 
 /**
  * roguelike_topic_table.json 中 ColorCombineDesc 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ColorCombineDesc {
   /** 原始数据字段 `RED`。 */
@@ -39,14 +39,14 @@ export interface ColorCombineDesc {
 /**
  * roguelike_topic_table.json 中 CombineGroupName 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type CombineGroupName = "normal" | "boss";
 
 /**
  * roguelike_topic_table.json 中 LinkedNodeTypeData 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface LinkedNodeTypeData {
   /** 原始数据字段 `effectiveNodeTypes`。 */
@@ -58,7 +58,7 @@ export interface LinkedNodeTypeData {
 /**
  * roguelike_topic_table.json 中 Rogue3__TotemEnchant 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Rogue3__TotemEnchant {
   /** 原始数据字段 `subBuffId`。 */
@@ -76,7 +76,7 @@ export interface Rogue3__TotemEnchant {
 /**
  * roguelike_topic_table.json 中 SubBuffs 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface SubBuffs {
   /** 原始数据字段 `rogue_3_totem_enchant_1`。 */
@@ -92,7 +92,7 @@ export interface SubBuffs {
 /**
  * roguelike_topic_table.json 中 TotemBuff 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface TotemBuff {
   /** 原始数据字段 `totemBuffDatas`。 */
@@ -106,7 +106,7 @@ export interface TotemBuff {
 /**
  * roguelike_topic_table.json 中 TotemBuffData 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface TotemBuffData {
   /** 原始数据字段 `totemId`。 */
@@ -148,14 +148,14 @@ export interface TotemBuffData {
 /**
  * roguelike_topic_table.json 中 TotemBuffDataColor 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type TotemBuffDataColor = "ALL" | "BLUE" | "GREEN" | "RED" | "NONE";
 
 /**
  * roguelike_topic_table.json 中 TotemBuffModuleConsts 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface TotemBuffModuleConsts {
   /** 原始数据字段 `totemPredictDescription`。 */

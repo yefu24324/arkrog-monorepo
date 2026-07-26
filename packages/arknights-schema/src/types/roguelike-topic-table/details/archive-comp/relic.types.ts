@@ -9,7 +9,7 @@ import type { EnrollId } from "../../shared/rogue-enums.types.js";
 /**
  * roguelike_topic_table.json 中 ArchiveCompRelic 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ArchiveCompRelic {
   /** 原始数据字段 `relic`。 */
@@ -19,7 +19,7 @@ export interface ArchiveCompRelic {
 /**
  * roguelike_topic_table.json 中 RelicRelic 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface RelicRelic {
   /** 原始数据字段 `relicId`。 */
@@ -39,7 +39,7 @@ export interface RelicRelic {
 /**
  * roguelike_topic_table.json 中 Rogue1__ActiveTool 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Rogue1__ActiveTool {
   /** 原始数据字段 `trapId`。 */

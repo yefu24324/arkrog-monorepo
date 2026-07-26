@@ -7,7 +7,7 @@
 /**
  * roguelike_topic_table.json 中 ChaosData 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ChaosData {
   /** 原始数据字段 `chaosId`。 */
@@ -35,7 +35,7 @@ export interface ChaosData {
 /**
  * roguelike_topic_table.json 中 ChaosDataSound 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type ChaosDataSound =
   "ON_ROGUELIKE_VARIATION1" | "ON_ROGUELIKE_VARIATION2";
@@ -43,7 +43,7 @@ export type ChaosDataSound =
 /**
  * roguelike_topic_table.json 中 ChaosModuleConsts 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ChaosModuleConsts {
   /** 原始数据字段 `maxChaosLevel`。 */
@@ -61,7 +61,7 @@ export interface ChaosModuleConsts {
 /**
  * roguelike_topic_table.json 中 ChaosRange 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ChaosRange {
   /** 原始数据字段 `chaosMax`。 */
@@ -73,7 +73,7 @@ export interface ChaosRange {
 /**
  * roguelike_topic_table.json 中 LevelInfoDict 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface LevelInfoDict {
   /** 原始数据字段 `rule_1`。 */
@@ -87,7 +87,7 @@ export interface LevelInfoDict {
 /**
  * roguelike_topic_table.json 中 ModuleChaos 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ModuleChaos {
   /** 原始数据字段 `chaosDatas`。 */
@@ -103,7 +103,7 @@ export interface ModuleChaos {
 /**
  * roguelike_topic_table.json 中 Rule 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Rule {
   /** 原始数据字段 `chaosLevelBeginNum`。 */

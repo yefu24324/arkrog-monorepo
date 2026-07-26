@@ -7,7 +7,7 @@
 /**
  * roguelike_topic_table.json 中 IconId 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type IconId =
   | "recruit_group_1"
@@ -35,7 +35,7 @@ export type IconId =
 /**
  * roguelike_topic_table.json 中 ItemTypeEnum 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type ItemTypeEnum =
   | "MATERIAL"
@@ -54,7 +54,7 @@ export type ItemTypeEnum =
 /**
  * roguelike_topic_table.json 中 Profession 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type Profession =
   | "WARRIOR"
@@ -70,14 +70,14 @@ export type Profession =
 /**
  * roguelike_topic_table.json 中 Rarity 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type Rarity = "NONE" | "NORMAL" | "BORN" | "SUPER_RARE" | "RARE";
 
 /**
  * roguelike_topic_table.json 中 RarityList 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type RarityList =
   "TIER_1" | "TIER_2" | "TIER_3" | "TIER_4" | "TIER_5" | "TIER_6";
@@ -85,7 +85,7 @@ export type RarityList =
 /**
  * roguelike_topic_table.json 中 RewardItemTypeEnum 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type RewardItemTypeEnum =
   | "HP"
@@ -137,7 +137,7 @@ export type RewardItemTypeEnum =
 /**
  * roguelike_topic_table.json 中 StyleId 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type StyleId =
   | "rogue_3_style_default"
@@ -151,6 +151,6 @@ export type StyleId =
 /**
  * roguelike_topic_table.json 中 ZoneId 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type ZoneId = "zone_1" | "zone_3" | "zone_5";

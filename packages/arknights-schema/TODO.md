@@ -1,12 +1,13 @@
 # 其他数据表覆盖计划
 
-当前优先完成 `roguelike_topic_table.json`。下列 `zh_CN/gamedata/excel` 数据表尚未纳入公开类型与 Zod Schema，后续应按业务领域逐批处理。
+已完整覆盖 `roguelike_topic_table.json` 和 `battle/buff_template_data.json`。下列
+`zh_CN/gamedata/excel` 数据表尚未纳入公开类型与 Zod Schema，后续应按业务领域逐批处理。
 
 ## 待处理原则
 
 - 每次选择一个或一组强关联数据表。
 - 先运行全量结构分析，再确认字典、固定对象和字符串枚举边界。
-- 新增显式 TypeScript 类型、严格 Zod Schema、中文文档和全量校验用例。
+- 新增显式 TypeScript 类型、严格 Zod Schema、中文源码注释和全量校验用例。
 - 完成后从本文件移除对应条目，并在变更记录中注明数据版本。
 
 ## 待处理数据表

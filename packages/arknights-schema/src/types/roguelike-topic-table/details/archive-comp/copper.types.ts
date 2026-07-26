@@ -11,7 +11,7 @@ import type { EnrollId, LuckyLevel } from "../../shared/rogue-enums.types.js";
 /**
  * roguelike_topic_table.json 中 ArchiveCompCopper 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ArchiveCompCopper {
   /** 原始数据字段 `coppers`。 */
@@ -27,7 +27,7 @@ export interface ArchiveCompCopper {
 /**
  * roguelike_topic_table.json 中 Blank 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Blank {
   /** 原始数据字段 `copperType`。 */
@@ -41,14 +41,14 @@ export interface Blank {
 /**
  * roguelike_topic_table.json 中 CopperArchiveType 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type CopperArchiveType = "LUCK" | "COPPER" | "GILD";
 
 /**
  * roguelike_topic_table.json 中 CopperType 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type CopperType =
   "NONE" | "BLANK" | "RESOURCE" | "FIGHT" | "TREASURE" | "UNSOUND";
@@ -56,7 +56,7 @@ export type CopperType =
 /**
  * roguelike_topic_table.json 中 CopperTypes 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface CopperTypes {
   /** 原始数据字段 `BLANK`。 */
@@ -74,7 +74,7 @@ export interface CopperTypes {
 /**
  * roguelike_topic_table.json 中 CopperValue 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface CopperValue {
   /** 原始数据字段 `id`。 */
@@ -96,7 +96,7 @@ export interface CopperValue {
 /**
  * roguelike_topic_table.json 中 High 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface High {
   /** 原始数据字段 `luckyLevel`。 */
@@ -112,7 +112,7 @@ export interface High {
 /**
  * roguelike_topic_table.json 中 LuckyLevels 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface LuckyLevels {
   /** 原始数据字段 `MID`。 */

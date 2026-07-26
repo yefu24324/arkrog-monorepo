@@ -11,7 +11,7 @@ import type { ItemTypeEnum } from "./item-enums.types.js";
 /**
  * roguelike_topic_table.json 中 BuyConfirm 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface BuyConfirm {
   /** 原始数据字段 `groups`。 */
@@ -21,7 +21,7 @@ export interface BuyConfirm {
 /**
  * roguelike_topic_table.json 中 BuyConfirmGroups 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface BuyConfirmGroups {
   /** 原始数据字段 `NONE`。 */
@@ -31,7 +31,7 @@ export interface BuyConfirmGroups {
 /**
  * roguelike_topic_table.json 中 FluffyBuySelect 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface FluffyBuySelect {
   /** 原始数据字段 `groups`。 */
@@ -41,7 +41,7 @@ export interface FluffyBuySelect {
 /**
  * roguelike_topic_table.json 中 FluffyGroups 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface FluffyGroups {
   /** 原始数据字段 `NONE`。 */
@@ -65,7 +65,7 @@ export interface FluffyGroups {
 /**
  * roguelike_topic_table.json 中 Reward 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Reward {
   /** 原始数据字段 `id`。 */

@@ -14,7 +14,7 @@ import type { EnrollId } from "../../shared/rogue-enums.types.js";
 /**
  * roguelike_topic_table.json 中 DetailDifficulty 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface DetailDifficulty {
   /** 原始数据字段 `modeDifficulty`。 */
@@ -74,7 +74,7 @@ export interface DetailDifficulty {
 /**
  * roguelike_topic_table.json 中 DisplayIconId 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type DisplayIconId =
   | "icon_difficulty_0"
@@ -85,7 +85,7 @@ export type DisplayIconId =
 /**
  * roguelike_topic_table.json 中 FailForceDesc 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type FailForceDesc =
   | "通过提升干员等级、技能等级或将干员精英化，可以在战斗中取得更大优势"
@@ -100,21 +100,21 @@ export type FailForceDesc =
 /**
  * roguelike_topic_table.json 中 FailTitle 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type FailTitle = "联系中断" | "小队解散" | "调查终止" | "暂时撤退";
 
 /**
  * roguelike_topic_table.json 中 NameImage 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type NameImage = "name_2" | "name_1";
 
 /**
  * roguelike_topic_table.json 中 RuleDescReplacement 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface RuleDescReplacement {
   /** 原始数据字段 `enrollId`。 */

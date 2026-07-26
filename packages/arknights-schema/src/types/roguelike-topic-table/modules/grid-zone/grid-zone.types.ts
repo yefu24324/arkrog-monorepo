@@ -9,7 +9,7 @@ import type { VariationClass } from "../../shared/core.types.js";
 /**
  * roguelike_topic_table.json 中 BannerIcon 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type BannerIcon =
   | "zone_banner_goal_final"
@@ -20,7 +20,7 @@ export type BannerIcon =
 /**
  * roguelike_topic_table.json 中 BannerText 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type BannerText =
   | "目标：找到<color=#0f907f>险路尽头</color>节点进入下一区域"
@@ -30,7 +30,7 @@ export type BannerText =
 /**
  * roguelike_topic_table.json 中 BuoyItemData 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface BuoyItemData {
   /** 原始数据字段 `itemId`。 */
@@ -42,7 +42,7 @@ export interface BuoyItemData {
 /**
  * roguelike_topic_table.json 中 GridZone 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface GridZone {
   /** 原始数据字段 `zoneMissionBannerData`。 */
@@ -60,7 +60,7 @@ export interface GridZone {
 /**
  * roguelike_topic_table.json 中 GridZoneModuleConsts 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface GridZoneModuleConsts {
   /** 原始数据字段 `savageBubble`。 */
@@ -76,7 +76,7 @@ export interface GridZoneModuleConsts {
 /**
  * roguelike_topic_table.json 中 ScrapSideBarStepZeroHintBannerDatum 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ScrapSideBarStepZeroHintBannerDatum {
   /** 原始数据字段 `zoneId`。 */
@@ -88,7 +88,7 @@ export interface ScrapSideBarStepZeroHintBannerDatum {
 /**
  * roguelike_topic_table.json 中 ZoneMissionBannerDatum 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ZoneMissionBannerDatum {
   /** 原始数据字段 `zoneId`。 */

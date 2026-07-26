@@ -15,7 +15,7 @@ import type { Rogue3__Difficulty1 } from "../../shared/rogue-variants.types.js";
 /**
  * roguelike_topic_table.json 中 BuffIconId 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type BuffIconId =
   | "rogue_1_grow_icon_attack"
@@ -27,7 +27,7 @@ export type BuffIconId =
 /**
  * roguelike_topic_table.json 中 Developments 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Developments {
   /** 原始数据字段 `outbuff_1`。 */
@@ -327,7 +327,7 @@ export interface Developments {
 /**
  * roguelike_topic_table.json 中 Outbuff 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Outbuff {
   /** 原始数据字段 `buffId`。 */
@@ -355,14 +355,14 @@ export interface Outbuff {
 /**
  * roguelike_topic_table.json 中 Outbuff1_NodeType 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type Outbuff1_NodeType = "BRANCH" | "KEY";
 
 /**
  * roguelike_topic_table.json 中 Rogue2__Outbuff 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Rogue2__Outbuff {
   /** 原始数据字段 `buffId`。 */
@@ -396,7 +396,7 @@ export interface Rogue2__Outbuff {
 /**
  * roguelike_topic_table.json 中 Rogue2_Outbuff1_NodeType 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type Rogue2_Outbuff1_NodeType =
   "SMALL" | "NORMAL" | "LARGE_RHODES" | "LARGE_ABYSSAL" | "LARGE_IBERIA";

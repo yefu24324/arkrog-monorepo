@@ -11,7 +11,7 @@ import type { HomeEntryDisplayDatum } from "./home-entry-display-data/home-entry
 /**
  * 集成战略主题的入口元数据，描述主题标识、展示周期、首页入口、机制模块和客户端功能配置。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Topic {
   /** 主题唯一标识，同时用作 details、modules 与 customizeData 中的关联键。 */

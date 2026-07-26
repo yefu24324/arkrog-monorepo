@@ -13,7 +13,7 @@ import type { LeftDisasterDesc } from "./rogue-enums.types.js";
 /**
  * roguelike_topic_table.json 中 Blackboard 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Blackboard {
   /** 原始数据字段 `key`。 */
@@ -27,7 +27,7 @@ export interface Blackboard {
 /**
  * roguelike_topic_table.json 中 BuffDisplayInfo 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface BuffDisplayInfo {
   /** 原始数据字段 `displayType`。 */
@@ -45,7 +45,7 @@ export interface BuffDisplayInfo {
 /**
  * roguelike_topic_table.json 中 BuffElement 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface BuffElement {
   /** 原始数据字段 `key`。 */
@@ -57,7 +57,7 @@ export interface BuffElement {
 /**
  * roguelike_topic_table.json 中 CopperGildTypeDatum 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface CopperGildTypeDatum {
   /** 原始数据字段 `gildTypeId`。 */
@@ -71,7 +71,7 @@ export interface CopperGildTypeDatum {
 /**
  * roguelike_topic_table.json 中 DevelopmentToken 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface DevelopmentToken {
   /** 原始数据字段 `sortId`。 */
@@ -85,7 +85,7 @@ export interface DevelopmentToken {
 /**
  * roguelike_topic_table.json 中 ErDatum 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ErDatum {
   /** 原始数据字段 `id`。 */
@@ -117,7 +117,7 @@ export interface ErDatum {
 /**
  * roguelike_topic_table.json 中 Idea 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Idea {
   /** 原始数据字段 `type`。 */

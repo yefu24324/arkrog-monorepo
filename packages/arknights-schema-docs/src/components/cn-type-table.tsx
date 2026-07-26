@@ -1,6 +1,5 @@
 /**
- * 面向中文阅读的字段类型表：首屏直接展示「属性 / 类型 / 说明」，
- * 并支持在复杂类型表达式中为多个自定义类型挂跳转链接。
+ * 面向中文阅读的字段类型表，并支持复杂类型表达式内的类型跳转。
  */
 
 import type { ReactNode } from 'react';
@@ -11,55 +10,36 @@ import { cn } from '@/lib/cn';
 export interface CnTypeField {
   /** TypeScript 类型表达式原文。 */
   type: string;
-  /** 字段注释（通常来自 JSDoc）。 */
+  /** 直接从字段 JSDoc 提取的说明。 */
   description?: string;
   /** 是否必需。 */
   required?: boolean;
-  /** 表达式中可跳转的自定义类型名 → 文档路径。 */
+  /** 表达式中可跳转的自定义类型名与文档路径。 */
   typeLinks?: Record<string, string>;
-  /**
-   * 主跳转目标；复杂表达式（如 Record 的值类型）时指向核心自定义类型。
-   * 与 typeLinks 一并用于渲染可点击类型名。
-   */
+  /** 复杂表达式的主要类型跳转目标。 */
   typeDescriptionLink?: string;
 }
 
 interface CnTypeTableProps {
-  /** 字段名 → 字段元数据。 */
+  /** 字段名与字段元数据映射。 */
   type: Record<string, CnTypeField>;
   className?: string;
 }
 
-/**
- * 合并 typeLinks 与 typeDescriptionLink，得到最终跳转映射。
- */
+/** 合并显式类型链接与复杂表达式的主要跳转目标。 */
 function resolveLinks(field: CnTypeField): Record<string, string> {
   const links: Record<string, string> = { ...(field.typeLinks ?? {}) };
-  if (!field.typeDescriptionLink) return links;
-
-  // 已有映射时，保证主链接对应的类型名也在表中。
-  if (Object.keys(links).length > 0) {
-    const alreadyMapped = Object.values(links).includes(field.typeDescriptionLink);
-    if (!alreadyMapped) {
-      const primary =
-        field.type.match(/^Record<[^,]+,\s*([A-Z][A-Za-z0-9_]*)\s*>$/)?.[1] ??
-        field.type.match(/^([A-Z][A-Za-z0-9_]*)(?:\[\])?$/)?.[1];
-      if (primary) links[primary] = field.typeDescriptionLink;
-    }
+  if (!field.typeDescriptionLink || Object.values(links).includes(field.typeDescriptionLink)) {
     return links;
   }
-
   const primary =
     field.type.match(/^Record<[^,]+,\s*([A-Z][A-Za-z0-9_]*)\s*>$/)?.[1] ??
-    field.type.match(/^(?:Partial|Required|Readonly|Array|Promise|NonNullable)<\s*([A-Z][A-Za-z0-9_]*)\s*>$/)?.[1] ??
     field.type.match(/^([A-Z][A-Za-z0-9_]*)(?:\[\])?$/)?.[1];
   if (primary) links[primary] = field.typeDescriptionLink;
   return links;
 }
 
-/**
- * 按最长优先匹配，把类型表达式拆成可链接片段。
- */
+/** 按最长名称优先，把类型表达式拆成文本与可跳转类型片段。 */
 function renderLinkedType(
   expression: string,
   typeLinks: Record<string, string>,
@@ -70,25 +50,13 @@ function renderLinkedType(
   const parts: ReactNode[] = [];
   let index = 0;
   let partKey = 0;
-
   while (index < expression.length) {
-    if (!/[A-Za-z_]/.test(expression[index]!)) {
-      parts.push(expression[index]);
-      index += 1;
-      continue;
-    }
-
-    let matched: string | null = null;
-    for (const name of names) {
-      if (
+    const matched = names.find(
+      (name) =>
+        (index === 0 || !/[A-Za-z0-9_]/.test(expression[index - 1] ?? '')) &&
         expression.startsWith(name, index) &&
-        !/[A-Za-z0-9_]/.test(expression[index + name.length] ?? '')
-      ) {
-        matched = name;
-        break;
-      }
-    }
-
+        !/[A-Za-z0-9_]/.test(expression[index + name.length] ?? ''),
+    );
     if (matched && typeLinks[matched]) {
       parts.push(
         <Link
@@ -102,24 +70,14 @@ function renderLinkedType(
       index += matched.length;
       continue;
     }
-
-    const identifier = expression.slice(index).match(/^[A-Za-z_][A-Za-z0-9_]*/)?.[0];
-    if (!identifier) {
-      parts.push(expression[index]);
-      index += 1;
-      continue;
-    }
-    parts.push(identifier);
-    index += identifier.length;
+    parts.push(expression[index]);
+    index += 1;
   }
-
   return parts;
 }
 
-/** 中文三列表格：属性、类型、说明始终可见。 */
+/** 中文三列表格：属性、类型和 JSDoc 说明始终可见。 */
 export function CnTypeTable({ type, className }: CnTypeTableProps) {
-  const entries = Object.entries(type);
-
   return (
     <div
       className={cn(
@@ -136,30 +94,23 @@ export function CnTypeTable({ type, className }: CnTypeTableProps) {
           </tr>
         </thead>
         <tbody>
-          {entries.map(([name, field]) => {
-            const links = resolveLinks(field);
-            return (
-              <tr
-                key={name}
-                className="border-b last:border-b-0 align-top hover:bg-fd-accent/40"
-              >
-                <td className="px-4 py-3">
-                  <code className="font-mono font-medium text-fd-primary">
-                    {name}
-                    {!field.required ? '?' : ''}
-                  </code>
-                </td>
-                <td className="px-4 py-3">
-                  <code className="break-all whitespace-pre-wrap font-mono text-[0.8125rem]">
-                    {renderLinkedType(field.type, links)}
-                  </code>
-                </td>
-                <td className="px-4 py-3 leading-relaxed text-fd-muted-foreground">
-                  {field.description ?? '—'}
-                </td>
-              </tr>
-            );
-          })}
+          {Object.entries(type).map(([name, field]) => (
+            <tr key={name} className="border-b last:border-b-0 align-top hover:bg-fd-accent/40">
+              <td className="px-4 py-3">
+                <code className="font-mono font-medium text-fd-primary">
+                  {name}{!field.required ? '?' : ''}
+                </code>
+              </td>
+              <td className="px-4 py-3">
+                <code className="break-all whitespace-pre-wrap font-mono text-[0.8125rem]">
+                  {renderLinkedType(field.type, resolveLinks(field))}
+                </code>
+              </td>
+              <td className="px-4 py-3 leading-relaxed text-fd-muted-foreground">
+                {field.description ?? '待补充。'}
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>

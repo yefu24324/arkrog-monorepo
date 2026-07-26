@@ -7,7 +7,7 @@
 /**
  * roguelike_topic_table.json 中 CustomizeDatumDevelopmentsDifficultyNodeInfos 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface CustomizeDatumDevelopmentsDifficultyNodeInfos {
   /** 原始数据字段 `rogue_3_difficulty_1`。 */
@@ -21,7 +21,7 @@ export interface CustomizeDatumDevelopmentsDifficultyNodeInfos {
 /**
  * roguelike_topic_table.json 中 Rogue3__Difficulty 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Rogue3__Difficulty {
   /** 原始数据字段 `buffId`。 */
@@ -35,7 +35,7 @@ export interface Rogue3__Difficulty {
 /**
  * roguelike_topic_table.json 中 Rogue3_Difficulty1_NodeMap 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Rogue3_Difficulty1_NodeMap {
   /** 原始数据字段 `frontNode`。 */

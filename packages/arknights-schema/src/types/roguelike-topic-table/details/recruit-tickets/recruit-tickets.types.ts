@@ -11,7 +11,7 @@ import type { Profession, RarityList } from "../../shared/item-enums.types.js";
 /**
  * roguelike_topic_table.json 中 ExtraCharId 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type ExtraCharId =
   | "char_504_rguard"
@@ -23,7 +23,7 @@ export type ExtraCharId =
 /**
  * roguelike_topic_table.json 中 RecruitTickets 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface RecruitTickets {
   /** 原始数据字段 `rogue_1_recruit_ticket_pioneer`。 */
@@ -735,7 +735,7 @@ export interface RecruitTickets {
 /**
  * roguelike_topic_table.json 中 Rogue1_RecruitTicket5StarClass 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Rogue1_RecruitTicket5StarClass {
   /** 原始数据字段 `id`。 */
@@ -759,7 +759,7 @@ export interface Rogue1_RecruitTicket5StarClass {
 /**
  * roguelike_topic_table.json 中 Rogue1_RecruitTicketAllClass 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Rogue1_RecruitTicketAllClass {
   /** 原始数据字段 `id`。 */
@@ -783,7 +783,7 @@ export interface Rogue1_RecruitTicketAllClass {
 /**
  * roguelike_topic_table.json 中 Rogue1_RecruitTicketCasterClass 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Rogue1_RecruitTicketCasterClass {
   /** 原始数据字段 `id`。 */

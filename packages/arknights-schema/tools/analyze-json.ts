@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import type { z } from "zod";
 
 import * as schemaExports from "../src/schemas/index.js";
+import { BuffTemplateDataSchema } from "../src/schemas/buff-template-data/buff-template-data.schemas.js";
 import { RoguelikeTopicTableSchema } from "../src/schemas/roguelike-topic-table/roguelike-topic-table.schemas.js";
 import {
   createSchemaNameIndex,
@@ -73,6 +74,11 @@ const TYPES_ROOT = path.resolve(PACKAGE_ROOT, "src", "types");
 
 /** 所有已经完成初始建模的数据表；未来新增表时在此登记。 */
 const TABLES: TableRegistration[] = [
+  {
+    relativePath: "zh_CN/gamedata/battle/buff_template_data.json",
+    rootSchemaName: "BuffTemplateDataSchema",
+    schema: BuffTemplateDataSchema,
+  },
   {
     relativePath: "zh_CN/gamedata/excel/roguelike_topic_table.json",
     rootSchemaName: "RoguelikeTopicTableSchema",
@@ -148,7 +154,9 @@ function createSourceLocationIndex(): Map<string, SourceLocation> {
     filePath.endsWith(".schemas.ts"),
   )) {
     const source = fs.readFileSync(schemaFile, "utf8");
-    const matches = source.matchAll(/export const\s+([A-Za-z0-9_$]+Schema)\s*=/g);
+    const matches = source.matchAll(
+      /export const\s+([A-Za-z0-9_$]+Schema)(?:\s*:[^=]+)?\s*=/g,
+    );
     for (const match of matches) {
       const relativeSchemaPath = path.relative(SCHEMAS_ROOT, schemaFile);
       const relativeTypePath = relativeSchemaPath.replace(/\.schemas\.ts$/, ".types.ts");

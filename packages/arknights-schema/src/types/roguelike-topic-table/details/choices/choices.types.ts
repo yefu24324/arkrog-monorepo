@@ -9,7 +9,7 @@ import type { Rogue6_ScrapM01_Enum } from "../../shared/rogue-enums.types.js";
 /**
  * roguelike_topic_table.json 中 Choice 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Choice {
   /** 原始数据字段 `id`。 */
@@ -41,7 +41,7 @@ export interface Choice {
 /**
  * roguelike_topic_table.json 中 DisplayData 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface DisplayData {
   /** 原始数据字段 `type`。 */
@@ -65,14 +65,14 @@ export interface DisplayData {
 /**
  * roguelike_topic_table.json 中 DisplayDataType 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type DisplayDataType = "NORMAL" | "ITEM";
 
 /**
  * roguelike_topic_table.json 中 IconEnum 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type IconEnum =
   | "leave"
@@ -127,14 +127,14 @@ export type IconEnum =
 /**
  * roguelike_topic_table.json 中 LeftDecoType 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type LeftDecoType = "NONE" | "DICE" | "TASK" | "TASK_REWARD" | "VISION";
 
 /**
  * roguelike_topic_table.json 中 THintType 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type THintType =
   | "NONE"

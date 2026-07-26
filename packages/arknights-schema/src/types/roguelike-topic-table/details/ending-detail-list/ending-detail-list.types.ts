@@ -7,7 +7,7 @@
 /**
  * roguelike_topic_table.json 中 EndingDetailList 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface EndingDetailList {
   /** 原始数据字段 `textId`。 */
@@ -31,7 +31,7 @@ export interface EndingDetailList {
 /**
  * roguelike_topic_table.json 中 EndingDetailListShowType 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type EndingDetailListShowType =
   "SUM" | "SHOW_CONST" | "SHOW_CHOICE" | "SHOW_BOSS_END" | "SHOW_BATTLE";
@@ -39,7 +39,7 @@ export type EndingDetailListShowType =
 /**
  * roguelike_topic_table.json 中 EventType 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type EventType =
   | "INCIDENT"
@@ -52,6 +52,6 @@ export type EventType =
 /**
  * roguelike_topic_table.json 中 SpZoneEvtType 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type SpZoneEvtType = "TRIAL_GATE";

@@ -11,7 +11,7 @@ import type { EnrollId } from "../../shared/rogue-enums.types.js";
 /**
  * roguelike_topic_table.json 中 ArchiveCompDisaster 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ArchiveCompDisaster {
   /** 原始数据字段 `disasters`。 */
@@ -21,7 +21,7 @@ export interface ArchiveCompDisaster {
 /**
  * roguelike_topic_table.json 中 ArchiveCompFragment 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ArchiveCompFragment {
   /** 原始数据字段 `fragment`。 */
@@ -31,7 +31,7 @@ export interface ArchiveCompFragment {
 /**
  * roguelike_topic_table.json 中 ArchiveCompScrap 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ArchiveCompScrap {
   /** 原始数据字段 `scraps`。 */
@@ -41,7 +41,7 @@ export interface ArchiveCompScrap {
 /**
  * roguelike_topic_table.json 中 ArchiveCompTotem 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ArchiveCompTotem {
   /** 原始数据字段 `totem`。 */
@@ -51,7 +51,7 @@ export interface ArchiveCompTotem {
 /**
  * roguelike_topic_table.json 中 ArchiveCompWeather 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ArchiveCompWeather {
   /** 原始数据字段 `weathers`。 */
@@ -61,7 +61,7 @@ export interface ArchiveCompWeather {
 /**
  * roguelike_topic_table.json 中 ArchiveCompWrath 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ArchiveCompWrath {
   /** 原始数据字段 `wraths`。 */
@@ -71,7 +71,7 @@ export interface ArchiveCompWrath {
 /**
  * roguelike_topic_table.json 中 DisasterValue 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface DisasterValue {
   /** 原始数据字段 `disasterId`。 */
@@ -91,7 +91,7 @@ export interface DisasterValue {
 /**
  * roguelike_topic_table.json 中 FragmentValue 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface FragmentValue {
   /** 原始数据字段 `fragmentId`。 */
@@ -105,7 +105,7 @@ export interface FragmentValue {
 /**
  * roguelike_topic_table.json 中 ScrapValue 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ScrapValue {
   /** 原始数据字段 `scrapId`。 */
@@ -119,7 +119,7 @@ export interface ScrapValue {
 /**
  * roguelike_topic_table.json 中 TotemValue 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface TotemValue {
   /** 原始数据字段 `id`。 */
@@ -135,7 +135,7 @@ export interface TotemValue {
 /**
  * roguelike_topic_table.json 中 WeatherValue 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface WeatherValue {
   /** 原始数据字段 `weatherId`。 */
@@ -149,7 +149,7 @@ export interface WeatherValue {
 /**
  * roguelike_topic_table.json 中 WrathValue 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface WrathValue {
   /** 原始数据字段 `wrathId`。 */

@@ -7,7 +7,7 @@
 /**
  * roguelike_topic_table.json 中 BattleSummeryDescriptions 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface BattleSummeryDescriptions {
   /** 原始数据字段 `EASY`。 */
@@ -25,7 +25,7 @@ export interface BattleSummeryDescriptions {
 /**
  * roguelike_topic_table.json 中 ChallengeClass 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ChallengeClass {
   /** 原始数据字段 `randomDescriptionList`。 */

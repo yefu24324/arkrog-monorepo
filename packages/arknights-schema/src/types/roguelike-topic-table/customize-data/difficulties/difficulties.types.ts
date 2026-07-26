@@ -14,7 +14,7 @@ import type {
 /**
  * roguelike_topic_table.json 中 CustomizeDatumDifficulty 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface CustomizeDatumDifficulty {
   /** 原始数据字段 `modeDifficulty`。 */
@@ -48,28 +48,28 @@ export interface CustomizeDatumDifficulty {
 /**
  * roguelike_topic_table.json 中 GildProbDisplay 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type GildProbDisplay = "低" | "标准" | "中" | "高";
 
 /**
  * roguelike_topic_table.json 中 LeftOverweightDesc 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type LeftOverweightDesc = "轻松" | "标准" | "沉重" | "崩溃";
 
 /**
  * roguelike_topic_table.json 中 LeftWeatherDesc 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type LeftWeatherDesc = "无" | "早期" | "中期" | "晚期";
 
 /**
  * roguelike_topic_table.json 中 SkyStepDescription 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type SkyStepDescription =
   "每进入一次节点，将有1点烛火熄灭，烛火全部熄灭时，意识将被逐回界园";
@@ -77,7 +77,7 @@ export type SkyStepDescription =
 /**
  * roguelike_topic_table.json 中 WeightStatusLimitDesc 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type WeightStatusLimitDesc =
   | "每前进一步，失去1点目标生命（不会使目标生命低于1）"

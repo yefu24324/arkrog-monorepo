@@ -7,7 +7,7 @@
 /**
  * roguelike_topic_table.json 中 BgmSignal 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type BgmSignal =
   | "ON_ROGUELIKE_MAP"
@@ -24,7 +24,7 @@ export type BgmSignal =
 /**
  * roguelike_topic_table.json 中 Id 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type Id =
   | "rogue_5_gild_1"
@@ -41,7 +41,7 @@ export type Id =
 /**
  * roguelike_topic_table.json 中 None 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface None {
   /** 原始数据字段 `content`。 */
@@ -51,13 +51,13 @@ export interface None {
 /**
  * roguelike_topic_table.json 中 Pos 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type Pos = "LOCATION" | "EFFECT" | "AFFIX";
 
 /**
  * roguelike_topic_table.json 中 VariationClass 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type VariationClass = Record<string, never>;

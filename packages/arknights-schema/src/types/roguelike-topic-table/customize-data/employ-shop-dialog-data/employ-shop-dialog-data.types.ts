@@ -11,7 +11,7 @@ import type { BuyConfirm } from "../../shared/rewards.types.js";
 /**
  * roguelike_topic_table.json 中 EmployShopDialogData 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface EmployShopDialogData {
   /** 原始数据字段 `types`。 */
@@ -21,7 +21,7 @@ export interface EmployShopDialogData {
 /**
  * roguelike_topic_table.json 中 EmployShopDialogDataTypes 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface EmployShopDialogDataTypes {
   /** 原始数据字段 `BUY_SELECT`。 */
@@ -37,7 +37,7 @@ export interface EmployShopDialogDataTypes {
 /**
  * roguelike_topic_table.json 中 PurpleBuySelect 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface PurpleBuySelect {
   /** 原始数据字段 `groups`。 */
@@ -47,7 +47,7 @@ export interface PurpleBuySelect {
 /**
  * roguelike_topic_table.json 中 PurpleGroups 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface PurpleGroups {
   /** 原始数据字段 `NONE`。 */

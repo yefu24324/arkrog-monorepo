@@ -7,7 +7,7 @@
 /**
  * roguelike_topic_table.json 中 BankReward 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface BankReward {
   /** 原始数据字段 `rewardId`。 */
@@ -23,7 +23,7 @@ export interface BankReward {
 /**
  * roguelike_topic_table.json 中 RewardId 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type RewardId =
   | "bank_reward_5"
@@ -35,7 +35,7 @@ export type RewardId =
 /**
  * roguelike_topic_table.json 中 RewardType 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type RewardType =
   "ADD_SHOP_POS" | "UNLOCK_ITEM" | "UNLOCK_WITHDRAW" | "UNLOCK_SHOP_BATTLE";

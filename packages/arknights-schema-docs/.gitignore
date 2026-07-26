@@ -4,14 +4,28 @@
 # generated content
 .source
 /content/docs/types
+/content/docs/relic-zones
+/content/docs/relic-zone-validation
 /content/docs/index.mdx
 /content/docs/meta.json
+/public/data/relic-zones
+/public/data/relic-zone-validation
+/public/data/operators
+/public/data/enemies
+/content/docs/formula-book.mdx
+/public/data/formula-book.json
 /generated
 
-# 由 scripts/generate-docs.ts 从 arknights-schema 组装
+# 由 scripts/generate-docs.ts 从 TypeScript/JSDoc 与 graph:export 组装
 /content/docs/types
+/content/docs/relic-zones
+/content/docs/relic-zone-validation
 /content/docs/index.mdx
 /content/docs/meta.json
+/public/data/relic-zones
+/public/data/relic-zone-validation
+/public/data/operators
+/public/data/enemies
 
 # test & build
 /coverage

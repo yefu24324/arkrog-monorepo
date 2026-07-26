@@ -20,9 +20,17 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
 
   const MDX = page.data.body;
   const markdownUrl = getPageMarkdownUrl(page).url;
+  // 数据表与公式页面需要完整横向空间；普通类型文档也比 Fumadocs 默认 900px 略宽。
+  const isWidePage = ['formula-book', 'relic-zones', 'relic-zone-validation'].includes(
+    page.slugs[0] ?? '',
+  );
 
   return (
-    <DocsPage toc={page.data.toc} full={page.data.full}>
+    <DocsPage
+      toc={page.data.toc}
+      full={page.data.full || isWidePage}
+      className={isWidePage ? 'max-w-[1600px] xl:px-6' : 'max-w-[1100px]'}
+    >
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription className="mb-0">{page.data.description}</DocsDescription>
       <div className="flex flex-row gap-2 items-center border-b pb-6">
@@ -31,12 +39,12 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
           markdownUrl={markdownUrl}
           githubUrl={
             page.slugs[0] === 'types' && page.slugs.length > 1
-              ? `https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/packages/arknights-schema/docs/types/${page.slugs.slice(1).join('/')}.md`
+              ? `https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/packages/arknights-schema/src/types/${page.slugs.slice(1).join('/')}.types.ts`
               : `https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/packages/arknights-schema-docs/content/docs/${page.path}`
           }
         />
       </div>
-      <DocsBody>
+      <DocsBody className="max-w-none">
         <MDX
           components={getMDXComponents({
             // this allows you to link to other pages with relative file paths

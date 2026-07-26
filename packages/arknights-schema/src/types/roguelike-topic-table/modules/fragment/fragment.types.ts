@@ -14,7 +14,7 @@ import type {
 /**
  * roguelike_topic_table.json 中 AlchemyDatum 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface AlchemyDatum {
   /** 原始数据字段 `fragmentTypeList`。 */
@@ -38,7 +38,7 @@ export interface AlchemyDatum {
 /**
  * roguelike_topic_table.json 中 AlchemyFormulaDatum 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface AlchemyFormulaDatum {
   /** 原始数据字段 `fragmentIds`。 */
@@ -54,7 +54,7 @@ export interface AlchemyFormulaDatum {
 /**
  * roguelike_topic_table.json 中 FragmentBuffDatum 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface FragmentBuffDatum {
   /** 原始数据字段 `itemId`。 */
@@ -68,7 +68,7 @@ export interface FragmentBuffDatum {
 /**
  * roguelike_topic_table.json 中 FragmentDatum 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface FragmentDatum {
   /** 原始数据字段 `id`。 */
@@ -84,7 +84,7 @@ export interface FragmentDatum {
 /**
  * roguelike_topic_table.json 中 FragmentLevelDatum 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface FragmentLevelDatum {
   /** 原始数据字段 `weightUp`。 */
@@ -94,7 +94,7 @@ export interface FragmentLevelDatum {
 /**
  * roguelike_topic_table.json 中 FragmentModuleConsts 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface FragmentModuleConsts {
   /** 原始数据字段 `weightStatusSafeDesc`。 */
@@ -124,7 +124,7 @@ export interface FragmentModuleConsts {
 /**
  * roguelike_topic_table.json 中 FragmentTypeData 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface FragmentTypeData {
   /** 原始数据字段 `WISH`。 */
@@ -138,14 +138,14 @@ export interface FragmentTypeData {
 /**
  * roguelike_topic_table.json 中 MaskType 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type MaskType = "ALL" | "BATTLES";
 
 /**
  * roguelike_topic_table.json 中 ModuleFragment 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ModuleFragment {
   /** 原始数据字段 `fragmentData`。 */
@@ -167,7 +167,7 @@ export interface ModuleFragment {
 /**
  * roguelike_topic_table.json 中 OverrideConditionBandId 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type OverrideConditionBandId =
   | "rogue_4_band_28"
@@ -178,6 +178,6 @@ export type OverrideConditionBandId =
 /**
  * roguelike_topic_table.json 中 TypeElement 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type TypeElement = "WISH" | "INSPIRATION" | "IDEA";

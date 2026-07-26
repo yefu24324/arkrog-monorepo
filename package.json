@@ -8,6 +8,7 @@
     "graph:build": "pnpm --filter @arkrog/arknights-knowledge-graph graph:build",
     "graph:cypher": "pnpm --filter @arkrog/arknights-knowledge-graph graph:cypher",
     "graph:export": "pnpm --filter @arkrog/arknights-knowledge-graph graph:export",
+    "graph:export:all": "pnpm --filter @arkrog/arknights-knowledge-graph graph:export:all",
     "graph:test": "pnpm --filter @arkrog/arknights-knowledge-graph test",
     "graph:trace": "pnpm --filter @arkrog/arknights-knowledge-graph graph:trace",
     "graph:typecheck": "pnpm --filter @arkrog/arknights-knowledge-graph typecheck",
@@ -17,7 +18,7 @@
     "schema:inspect": "pnpm --filter @arkrog/arknights-schema data:inspect",
     "schema:validate": "pnpm --filter @arkrog/arknights-schema data:validate",
     "schema:docs:generate": "pnpm --filter @arkrog/arknights-schema-docs docs:generate",
-    "schema:docs:dev": "pnpm --filter @arkrog/arknights-schema-docs dev",
+    "schema:docs:dev": "pnpm --filter @arkrog/arknights-schema-docs dev --port 6011",
     "schema:docs:build": "pnpm --filter @arkrog/arknights-schema-docs build"
   }
 }

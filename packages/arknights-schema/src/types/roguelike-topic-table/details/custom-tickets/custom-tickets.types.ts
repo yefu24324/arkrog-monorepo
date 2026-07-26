@@ -7,7 +7,7 @@
 /**
  * roguelike_topic_table.json 中 CustomTickets 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface CustomTickets {
   /** 原始数据字段 `rogue_2_custom_ticket_purify`。 */
@@ -19,7 +19,7 @@ export interface CustomTickets {
 /**
  * roguelike_topic_table.json 中 Rogue2_CustomTicketPurifyClass 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Rogue2_CustomTicketPurifyClass {
   /** 原始数据字段 `id`。 */

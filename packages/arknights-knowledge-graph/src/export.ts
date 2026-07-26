@@ -1,16 +1,11 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import {
-  classifyEffect,
-  DAMAGE_ZONES,
-} from "./domain/damage-zones.js";
 import { resolveRepositoryPaths, toRepositoryPath } from "./paths.js";
 import { runCypher } from "./query.js";
-import type { EffectContext } from "./types.js";
 
 /** GameData 中导出器使用的最小黑板结构。 */
-interface BlackboardValue {
+export interface BlackboardValue {
   /** 黑板参数名。 */
   key: string;
   /** 数值参数。 */
@@ -36,7 +31,7 @@ interface CharacterBuff {
   /** 前八种新典训使用藏品 ID 作为图标 ID。 */
   iconId: string;
   /** 实际战斗 buff。 */
-  buffs: BuffElement[];
+  buffs?: BuffElement[];
 }
 
 /** GameData 中导出器使用的最小藏品结构。 */
@@ -69,6 +64,8 @@ interface GraphEffectRow {
   parameters: string;
   /** 原始 JSON 路径。 */
   jsonPath: string;
+  /** 效果事实来源。 */
+  sourceKind: string;
   /** 战斗模板名。 */
   mechanic: string;
   /** 战斗事件。 */
@@ -89,14 +86,116 @@ interface GraphEffectRow {
   reason: string;
   /** 证据路径。 */
   evidencePath: string;
+  /** 命中的可版本化语义规则。 */
+  ruleId: string;
 }
 
-/** 避免 Markdown 表格被原始文本中的管道符或换行打断。 */
-function markdown(value: unknown): string {
-  return String(value ?? "")
-    .replaceAll("|", "\\|")
-    .replace(/\r?\n/g, "<br>")
-    .trim();
+/** JSON 中单个乘区预测的稳定结构。 */
+export interface ExportedZonePrediction {
+  /** 乘区 ID。 */
+  id: string;
+  /** 公式符号。 */
+  symbol: string;
+  /** 乘区中文名。 */
+  name: string;
+  /** 公式位置。 */
+  formula: string;
+  /** verified 或 inferred。 */
+  status: string;
+  /** 判定原因。 */
+  reason: string;
+  /** 命中的语义规则 ID。 */
+  ruleId: string;
+  /** 原始效果和 Action 的证据路径。 */
+  evidencePaths: string[];
+}
+
+/** JSON 中一条藏品 buff 的完整生产预测。 */
+export interface ExportedRelicEffect {
+  /** 图谱 Effect 稳定 ID。 */
+  effectId: string;
+  /** relics 或具体 charBuffData 来源。 */
+  source: string;
+  /** 原始 buffs 数组的零基下标。 */
+  buffIndex: number;
+  /** buff 载体类型。 */
+  key: string;
+  /** 原始结构化黑板。 */
+  blackboard: BlackboardValue[];
+  /** 便于搜索和展示的黑板摘要。 */
+  parameters: string;
+  /** 战斗模板事实。 */
+  mechanic: {
+    /** 模板名。 */
+    name: string;
+    /** 模板事件。 */
+    events: string[];
+    /** 模板中的 Action 组件类型。 */
+    componentTypes: string[];
+  };
+  /** 从事件和选择器得到的机器可见生效条件。 */
+  condition: string;
+  /** predicted、unknown 或 not_applicable。 */
+  classification: "predicted" | "unknown" | "not_applicable";
+  /** 当前效果命中的证据等级。 */
+  evidenceStatuses: string[];
+  /** 一个效果可以同时影响多个乘区。 */
+  predictions: ExportedZonePrediction[];
+  /** 未得到乘区时的明确原因。 */
+  unclassifiedReason: string | null;
+  /** 原始 GameData JSON 路径。 */
+  jsonPath: string;
+}
+
+/** JSON 中一件藏品及其全部直接、间接效果。 */
+export interface ExportedRelic {
+  /** 藏品稳定 ID。 */
+  id: string;
+  /** 游戏内名称。 */
+  name: string;
+  /** 稀有度。 */
+  rarity: string;
+  /** 游戏内排序值。 */
+  sortId: number;
+  /** 效果与条件原文。 */
+  usage: string | null;
+  /** 背景描述。 */
+  description: string | null;
+  /** 机器可见生效条件去重集合。 */
+  conditions: string[];
+  /** 当前藏品涉及的去重乘区。 */
+  zones: Array<{ id: string; symbol: string; name: string }>;
+  /** 当前藏品的 buff 数量。 */
+  effectCount: number;
+  /** 当前藏品的全部 buff 预测。 */
+  effects: ExportedRelicEffect[];
+}
+
+/** 主题藏品乘区 JSON 的顶层格式。 */
+export interface RelicZoneExport {
+  /** 导出格式版本，字段结构变化时递增。 */
+  schemaVersion: 1;
+  /** ISO 8601 生成时间。 */
+  generatedAt: string;
+  /** 集成战略主题。 */
+  topic: { id: string; name: string };
+  /** 生产预测实际使用的数据源。 */
+  sources: string[];
+  /** 导出口径和总数。 */
+  scope: { itemType: "RELIC"; itemCount: number; effectCount: number };
+  /** 乘区预测覆盖统计。 */
+  coverage: {
+    /** 至少含一个 verified 预测的效果数。 */
+    verifiedEffectCount: number;
+    /** 至少含一个 inferred 预测的效果数。 */
+    inferredEffectCount: number;
+    /** 涉及战斗数值但尚未映射的效果数。 */
+    unknownEffectCount: number;
+    /** 明确不进入伤害公式的效果数。 */
+    notApplicableEffectCount: number;
+  };
+  /** 主题内全部 RELIC 藏品。 */
+  items: ExportedRelic[];
 }
 
 /** 将常见战斗事件翻译成可读条件。 */
@@ -117,14 +216,8 @@ function translateEvent(event: string): string {
 }
 
 /** 从战斗事件和黑板选择器中提炼机器可见的生效条件。 */
-function deriveCondition(
-  events: string,
-  blackboard: BlackboardValue[],
-): string {
-  const parts = events
-    .split(" | ")
-    .filter(Boolean)
-    .map(translateEvent);
+function deriveCondition(events: string, blackboard: BlackboardValue[]): string {
+  const parts = events.split(" | ").filter(Boolean).map(translateEvent);
   const labels: Record<string, string> = {
     "selector.profession": "职业",
     "selector.sub_profession": "分支职业",
@@ -157,6 +250,11 @@ function text(value: unknown): string {
   return value === null || value === undefined ? "" : String(value);
 }
 
+/** 把 Kuzu 中用竖线连接的集合恢复成 JSON 数组。 */
+function splitValues(value: string): string[] {
+  return value.split(" | ").filter(Boolean);
+}
+
 /** 按效果节点聚合可能存在的多个乘区结论。 */
 function groupGraphRows(rows: Record<string, unknown>[]): Map<string, GraphEffectRow[]> {
   const grouped = new Map<string, GraphEffectRow[]>();
@@ -168,6 +266,7 @@ function groupGraphRows(rows: Record<string, unknown>[]): Map<string, GraphEffec
       effectKey: text(row.effectKey),
       parameters: text(row.parameters),
       jsonPath: text(row.jsonPath),
+      sourceKind: text(row.sourceKind),
       mechanic: text(row.mechanic),
       events: text(row.events),
       components: text(row.components),
@@ -178,23 +277,11 @@ function groupGraphRows(rows: Record<string, unknown>[]): Map<string, GraphEffec
       status: text(row.status),
       reason: text(row.reason),
       evidencePath: text(row.evidencePath),
+      ruleId: text(row.ruleId),
     };
     grouped.set(effectId, [...(grouped.get(effectId) ?? []), normalized]);
   }
   return grouped;
-}
-
-/** 将黑板数组转换成领域分类器使用的上下文。 */
-function effectContext(buff: BuffElement): EffectContext {
-  return {
-    effectKey: buff.key,
-    parameters: new Map(
-      buff.blackboard.map((parameter) => [
-        parameter.key,
-        parameter.valueStr ?? parameter.value,
-      ]),
-    ),
-  };
 }
 
 /** 生成与图谱 Effect.parameters 一致的黑板摘要。 */
@@ -204,231 +291,193 @@ function summarizeBlackboard(blackboard: BlackboardValue[]): string {
     .join(", ");
 }
 
-/** 递归提取战斗模板 Action 组件名。 */
-function templateComponents(value: unknown, target = new Set<string>()): Set<string> {
-  if (Array.isArray(value)) {
-    value.forEach((entry) => templateComponents(entry, target));
-    return target;
-  }
-  if (!value || typeof value !== "object") return target;
-  for (const [key, child] of Object.entries(value)) {
-    if (key === "$type" && typeof child === "string") {
-      target.add(child.split(",")[0]?.replace("Torappu.Battle.Action.Nodes+", "") ?? child);
-    } else {
-      templateComponents(child, target);
-    }
-  }
-  return target;
-}
-
-/** 为尚未进入主图的 charBuffData 效果生成同构乘区结果。 */
-function classifyCharacterBuff(
-  topicId: string,
-  itemId: string,
-  characterBuffId: string,
-  buff: BuffElement,
-  buffIndex: number,
-  templates: Record<string, { eventToActions?: Record<string, unknown> }>,
-): GraphEffectRow[] {
-  const context = effectContext(buff);
-  const mechanicValue = context.parameters.get("key");
-  const mechanic = typeof mechanicValue === "string" ? mechanicValue : "";
-  const template = templates[mechanic];
-  const base = {
-    itemId,
-    effectId: `effect:${topicId}:charBuffData:${characterBuffId}:${buffIndex}`,
-    effectKey: buff.key,
-    parameters: summarizeBlackboard(buff.blackboard),
-    jsonPath: `$.details.${topicId}.charBuffData[${JSON.stringify(characterBuffId)}].buffs[${buffIndex}]`,
-    mechanic,
-    events: Object.keys(template?.eventToActions ?? {}).sort().join(" | "),
-    components: [...templateComponents(template)].sort().join(" | "),
-  };
-  const mappings = classifyEffect(context);
-  if (mappings.length === 0) {
-    return [{
-      ...base,
-      zoneId: "",
-      symbol: "",
-      zoneName: "",
-      formula: "",
-      status: "",
-      reason: "",
-      evidencePath: "",
-    }];
-  }
-  return mappings.map((mapping) => {
-    const zone = DAMAGE_ZONES.find((candidate) => candidate.id === mapping.zoneId);
-    return {
-      ...base,
-      zoneId: mapping.zoneId,
-      symbol: zone?.symbol ?? mapping.zoneId,
-      zoneName: zone?.name ?? mapping.zoneId,
-      formula: zone?.formula ?? "",
-      status: mapping.status,
-      reason: mapping.reason,
-      evidencePath: mapping.evidencePath,
-    };
-  });
-}
-
 /** 区分未建模战斗效果与明确不进入伤害公式的载体效果。 */
-function fallbackZone(effectKey: string, parameters: string, components: string): string {
+function fallbackClassification(
+  effectKey: string,
+  parameters: string,
+  components: string,
+): { classification: "unknown" | "not_applicable"; reason: string } {
   const combatSignal = `${effectKey} ${parameters} ${components}`;
-  return /atk|attack|damage|def|resistance|max_hp|attack_speed|攻击|伤害|防御|法抗|生命|攻速/i.test(combatSignal)
-    ? "UNKNOWN（战斗数值尚未映射）"
-    : "N/A（非伤害乘区）";
+  const isCombatValue = /atk|attack|damage|def|resistance|max_hp|attack_speed|攻击|伤害|防御|法抗|生命|攻速/i.test(combatSignal);
+  return isCombatValue
+    ? { classification: "unknown", reason: "效果涉及战斗数值，但当前语义规则尚未映射到公式乘区。" }
+    : { classification: "not_applicable", reason: "奖励、资源或部署规则等效果不进入伤害乘区。" };
 }
 
-/** 导出指定集成战略主题的全部 RELIC 藏品与逐 buff 乘区明细。 */
-export async function exportRelicZoneMarkdown(
+/** 将图中一条乘区边转换成公开 JSON 结构。 */
+function exportPrediction(row: GraphEffectRow): ExportedZonePrediction {
+  return {
+    id: row.zoneId,
+    symbol: row.symbol || row.zoneId,
+    name: row.zoneName,
+    formula: row.formula,
+    status: row.status,
+    reason: row.reason,
+    ruleId: row.ruleId,
+    evidencePaths: splitValues(row.evidencePath),
+  };
+}
+
+/** 导出指定集成战略主题的全部 RELIC 藏品与逐 buff 乘区 JSON。 */
+export async function exportRelicZoneJson(
   topicId: string,
   outputOverride?: string,
+  databaseOverride?: string,
 ): Promise<{ outputPath: string; itemCount: number; effectCount: number }> {
   if (!/^rogue_\d+$/.test(topicId)) {
     throw new Error(`主题 ID 格式无效：${topicId}`);
   }
-  const paths = resolveRepositoryPaths();
+  const paths = resolveRepositoryPaths(databaseOverride);
   const tablePath = path.join(paths.gameData, "excel", "roguelike_topic_table.json");
   const data = JSON.parse(await readFile(tablePath, "utf8")) as {
     topics: Record<string, { name: string }>;
-    details: Record<
-      string,
-      {
-        items: Record<string, RelicItem>;
-        relics: Record<string, { buffs: BuffElement[] }>;
-        charBuffData: Record<string, CharacterBuff>;
-      }
-    >;
+    details: Record<string, {
+      items: Record<string, RelicItem>;
+      relics: Record<string, { buffs: BuffElement[] }>;
+      charBuffData: Record<string, CharacterBuff>;
+    }>;
   };
   const detail = data.details[topicId];
   const topicName = data.topics[topicId]?.name ?? topicId;
   if (!detail) throw new Error(`GameData 中不存在主题：${topicId}`);
-  const templatePath = path.join(paths.gameData, "battle", "buff_template_data.json");
-  const templates = JSON.parse(await readFile(templatePath, "utf8")) as Record<
-    string,
-    { eventToActions?: Record<string, unknown> }
-  >;
 
+  // 导出器只读取生产图中的预测，避免形成独立于语义规则的旁路分类器。
   const graphRows = await runCypher(
     `MATCH (i:Item)-[:ITEM_HAS_EFFECT]->(e:Effect)
      WHERE i.topic = '${topicId}'
      OPTIONAL MATCH (e)-[mapping:EFFECT_ENTERS_ZONE]->(z:DamageZone)
      OPTIONAL MATCH (e)-[:EFFECT_USES_MECHANIC]->(mechanic:Mechanic)
      RETURN i.rawId AS itemId, e.id AS effectId, e.key AS effectKey,
-            e.parameters AS parameters, e.jsonPath AS jsonPath,
+            e.parameters AS parameters, e.jsonPath AS jsonPath, e.sourceKind AS sourceKind,
             mechanic.name AS mechanic, mechanic.events AS events,
             mechanic.componentTypes AS components, z.id AS zoneId,
             z.symbol AS symbol, z.name AS zoneName, z.formula AS formula,
             mapping.status AS status, mapping.reason AS reason,
-            mapping.evidencePath AS evidencePath
+            mapping.evidencePath AS evidencePath, mapping.ruleId AS ruleId
      ORDER BY i.rawId, e.jsonPath, z.stage`,
+    databaseOverride,
   );
   const graphByEffect = groupGraphRows(graphRows as Record<string, unknown>[]);
-  const items = Object.values(detail.items)
+  const relicItems = Object.values(detail.items)
     .filter((item) => item.type === "RELIC")
     .sort((left, right) => left.sortId - right.sortId || left.id.localeCompare(right.id));
 
-  const summaryRows: string[] = [];
-  const detailRows: string[] = [];
   let effectCount = 0;
-  let verifiedCount = 0;
-  let inferredCount = 0;
-  for (const [itemIndex, item] of items.entries()) {
+  let verifiedEffectCount = 0;
+  let inferredEffectCount = 0;
+  let unknownEffectCount = 0;
+  let notApplicableEffectCount = 0;
+  const exportedItems: ExportedRelic[] = [];
+
+  for (const item of relicItems) {
     const directBuffs = (detail.relics[item.id]?.buffs ?? []).map((buff, buffIndex) => ({
       buff,
       buffIndex,
       source: "relics",
+      effectId: `effect:${topicId}:${item.id}:${buffIndex}`,
+      jsonPath: `$.details.${topicId}.relics[${JSON.stringify(item.id)}].buffs[${buffIndex}]`,
       graphEffects: graphByEffect.get(`effect:${topicId}:${item.id}:${buffIndex}`) ?? [],
     }));
     const characterBuffs = Object.values(detail.charBuffData)
-      .filter((characterBuff) =>
-        characterBuff.relatedItemId === item.id || characterBuff.iconId === item.id,
-      )
-      .flatMap((characterBuff) =>
-        characterBuff.buffs.map((buff, buffIndex) => ({
-          buff,
-          buffIndex,
-          source: `charBuffData:${characterBuff.id}`,
-          graphEffects: classifyCharacterBuff(
-            topicId,
-            item.id,
-            characterBuff.id,
-            buff,
-            buffIndex,
-            templates,
-          ),
-        })),
-      );
+      .filter((characterBuff) => characterBuff.relatedItemId === item.id || characterBuff.iconId === item.id)
+      .flatMap((characterBuff) => (characterBuff.buffs ?? []).map((buff, buffIndex) => ({
+        buff,
+        buffIndex,
+        source: `charBuffData:${characterBuff.id}`,
+        effectId: `effect:${topicId}:charBuffData:${characterBuff.id}:${buffIndex}`,
+        jsonPath: `$.details.${topicId}.charBuffData[${JSON.stringify(characterBuff.id)}].buffs[${buffIndex}]`,
+        // charBuffData 已是生产图中的原始事实，导出器按稳定 Effect ID 读取预测。
+        graphEffects: graphByEffect.get(`effect:${topicId}:charBuffData:${characterBuff.id}:${buffIndex}`) ?? [],
+      })));
     const effects = [...directBuffs, ...characterBuffs];
-    const itemZones = new Set<string>();
     const itemConditions = new Set<string>();
-    effects.forEach(({ buff, buffIndex, source, graphEffects }) => {
+    const itemZones = new Map<string, { id: string; symbol: string; name: string }>();
+    const exportedEffects: ExportedRelicEffect[] = [];
+
+    for (const { buff, buffIndex, source, effectId, jsonPath, graphEffects } of effects) {
       effectCount += 1;
       const firstGraph = graphEffects[0];
-      const conditions = deriveCondition(firstGraph?.events ?? "", buff.blackboard);
-      itemConditions.add(conditions);
-      const zones = graphEffects.filter((row) => row.zoneId);
-      zones.forEach((row) => itemZones.add(`${row.zoneName}（${row.symbol || row.zoneId}）`));
-      const zoneText = zones.length
-        ? zones.map((row) => `${row.zoneName}（${row.symbol || row.zoneId}）`).join("；")
-        : fallbackZone(buff.key, firstGraph?.parameters ?? summarizeBlackboard(buff.blackboard), firstGraph?.components ?? "");
-      const status = zones.length
-        ? [...new Set(zones.map((row) => row.status))].join("/")
-        : zoneText.startsWith("UNKNOWN")
-          ? "unknown"
-          : "not_applicable";
-      verifiedCount += zones.some((row) => row.status === "verified") ? 1 : 0;
-      inferredCount += zones.some((row) => row.status === "inferred") ? 1 : 0;
-      const reason = zones.map((row) => row.reason).filter(Boolean).join("；");
-      const evidence = zones.map((row) => row.evidencePath).filter(Boolean).join("；");
-      detailRows.push(
-        `| ${itemIndex + 1} | ${markdown(item.id)} | ${markdown(item.name)} | ${markdown(source)} | ${buffIndex + 1} | ${markdown(buff.key)} | ${markdown(firstGraph?.parameters ?? summarizeBlackboard(buff.blackboard))} | ${markdown(firstGraph?.mechanic ?? "")} | ${markdown(firstGraph?.components ?? "")} | ${markdown(conditions)} | ${markdown(zoneText)} | ${markdown(status)} | ${markdown(reason)} | ${markdown(evidence)} | ${markdown(firstGraph?.jsonPath ?? "")} |`,
-      );
+      const parameters = firstGraph?.parameters ?? summarizeBlackboard(buff.blackboard);
+      const condition = deriveCondition(firstGraph?.events ?? "", buff.blackboard);
+      const zoneRows = graphEffects.filter((row) => row.zoneId);
+      const predictions = zoneRows.map(exportPrediction);
+      const fallback = fallbackClassification(buff.key, parameters, firstGraph?.components ?? "");
+      const classification = predictions.length > 0 ? "predicted" as const : fallback.classification;
+      const evidenceStatuses = [...new Set(zoneRows.map((row) => row.status).filter(Boolean))];
+
+      itemConditions.add(condition);
+      predictions.forEach((prediction) => itemZones.set(prediction.id, {
+        id: prediction.id,
+        symbol: prediction.symbol,
+        name: prediction.name,
+      }));
+      if (evidenceStatuses.includes("verified")) verifiedEffectCount += 1;
+      if (evidenceStatuses.includes("inferred")) inferredEffectCount += 1;
+      if (classification === "unknown") unknownEffectCount += 1;
+      if (classification === "not_applicable") notApplicableEffectCount += 1;
+
+      exportedEffects.push({
+        effectId: firstGraph?.effectId ?? effectId,
+        source,
+        buffIndex,
+        key: buff.key,
+        blackboard: buff.blackboard,
+        parameters,
+        mechanic: {
+          name: firstGraph?.mechanic ?? "",
+          events: splitValues(firstGraph?.events ?? ""),
+          componentTypes: splitValues(firstGraph?.components ?? ""),
+        },
+        condition,
+        classification,
+        evidenceStatuses,
+        predictions,
+        unclassifiedReason: classification === "predicted" ? null : fallback.reason,
+        jsonPath: firstGraph?.jsonPath ?? jsonPath,
+      });
+    }
+
+    exportedItems.push({
+      id: item.id,
+      name: item.name,
+      rarity: item.rarity,
+      sortId: item.sortId,
+      usage: item.usage,
+      description: item.description,
+      conditions: [...itemConditions],
+      zones: [...itemZones.values()],
+      effectCount: exportedEffects.length,
+      effects: exportedEffects,
     });
-    summaryRows.push(
-      `| ${itemIndex + 1} | ${markdown(item.id)} | ${markdown(item.name)} | ${markdown(item.rarity)} | ${markdown(item.usage)} | ${markdown([...itemConditions].join("；"))} | ${markdown([...itemZones].join("；") || (/攻击|伤害|防御|法抗|生命|攻速/.test(item.usage ?? "") ? "UNKNOWN（战斗数值尚未映射）" : "N/A（非伤害乘区）"))} | ${effects.length} |`,
-    );
   }
 
-  const generatedAt = new Date().toISOString();
+  const document: RelicZoneExport = {
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    topic: { id: topicId, name: topicName },
+    sources: [
+      "ArknightsGameData/zh_CN/gamedata/excel/roguelike_topic_table.json",
+      "ArknightsGameData/zh_CN/gamedata/battle/buff_template_data.json",
+      "packages/arknights-schema/src",
+      "packages/arknights-knowledge-graph/src/domain/engine-rules.ts",
+    ],
+    scope: { itemType: "RELIC", itemCount: relicItems.length, effectCount },
+    coverage: {
+      verifiedEffectCount,
+      inferredEffectCount,
+      unknownEffectCount,
+      notApplicableEffectCount,
+    },
+    items: exportedItems,
+  };
   const outputPath = outputOverride
     ? path.resolve(paths.root, outputOverride)
-    : path.join(paths.root, "docs", "game", topicName, `${topicName}藏品乘区与生效条件表.md`);
-  const content = `# ${topicName}（${topicId}）藏品乘区与生效条件表
-
-> 生成时间：${generatedAt}  
-> 数据源：\`ArknightsGameData/zh_CN/gamedata/excel/roguelike_topic_table.json\`、\`buff_template_data.json\`、\`packages/arknights-schema\`、\`docs/game\`。  
-> 口径：只统计 \`details.${topicId}.items\` 中 \`type = RELIC\` 的 ${items.length} 件藏品。同一藏品的多个 buff 在明细表中分行。
-
-## 覆盖情况
-
-| 指标 | 数量 |
-|---|---:|
-| 藏品 | ${items.length} |
-| buff 明细 | ${effectCount} |
-| 含 verified 乘区的 buff | ${verifiedCount} |
-| 含 inferred 乘区的 buff | ${inferredCount} |
-
-\`UNKNOWN\` 表示效果涉及战斗数值，但当前图谱没有足够证据映射到公式乘区；\`N/A\` 表示奖励、资源、部署规则等不进入伤害乘区。生效条件优先来自战斗模板事件和黑板选择器，完整自然语言限制保留在“效果与条件原文”。
-
-## 藏品汇总
-
-| # | 藏品 ID | 名称 | 稀有度 | 效果与条件原文 | 机器可见生效条件 | 涉及乘区 | buff 数 |
-|---:|---|---|---|---|---|---|---:|
-${summaryRows.join("\n")}
-
-## Buff 与证据明细
-
-| 藏品序号 | 藏品 ID | 名称 | 效果来源 | buff # | buff 类型 | 黑板 | 战斗模板 | Action 组件 | 机器可见生效条件 | 乘区 | 证据状态 | 判定理由 | 证据路径 | 原始 JSON 路径 |
-|---:|---|---|---|---:|---|---|---|---|---|---|---|---|---|---|
-${detailRows.join("\n")}
-`;
+    : path.join(paths.root, "docs", "game", topicName, `${topicName}藏品乘区与生效条件表.json`);
   await mkdir(path.dirname(outputPath), { recursive: true });
-  await writeFile(outputPath, content, "utf8");
+  await writeFile(outputPath, `${JSON.stringify(document, null, 2)}\n`, "utf8");
   return {
     outputPath: toRepositoryPath(paths.root, outputPath),
-    itemCount: items.length,
+    itemCount: relicItems.length,
     effectCount,
   };
 }

@@ -19,7 +19,6 @@
   },
   "files": [
     "dist",
-    "docs",
     "TODO.md"
   ],
   "scripts": {
@@ -30,8 +29,7 @@
     "data:generate": "pnpm data:bootstrap",
     "data:analyze": "tsx tools/analyze-json.ts",
     "data:inspect": "tsx tools/analyze-json.ts --all",
-    "data:validate": "tsx tools/validate-roguelike-topic.ts",
-    "docs:check": "tsx tools/check-docs.ts"
+    "data:validate": "tsx tools/validate-roguelike-topic.ts"
   },
   "dependencies": {
     "zod": "^4.0.0"

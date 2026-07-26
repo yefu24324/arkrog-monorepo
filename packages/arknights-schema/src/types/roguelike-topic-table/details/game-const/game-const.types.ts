@@ -9,7 +9,7 @@ import type { BgmSignal } from "../../shared/core.types.js";
 /**
  * roguelike_topic_table.json 中 GameConst 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface GameConst {
   /** 原始数据字段 `initSceneName`。 */
@@ -203,7 +203,7 @@ export interface GameConst {
 /**
  * roguelike_topic_table.json 中 ItemDropTagDict 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ItemDropTagDict {
   /** 原始数据字段 `TREASURE`。 */

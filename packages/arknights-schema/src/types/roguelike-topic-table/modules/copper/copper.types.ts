@@ -15,7 +15,7 @@ import type { LuckyLevel } from "../../shared/rogue-enums.types.js";
 /**
  * roguelike_topic_table.json 中 CopperDatum 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface CopperDatum {
   /** 原始数据字段 `id`。 */
@@ -43,14 +43,14 @@ export interface CopperDatum {
 /**
  * roguelike_topic_table.json 中 CopperDatumBuffType 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type CopperDatumBuffType = "NONE" | "REFRESH" | "MOVE";
 
 /**
  * roguelike_topic_table.json 中 CopperDivineDatum 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface CopperDivineDatum {
   /** 原始数据字段 `eventId`。 */
@@ -68,7 +68,7 @@ export interface CopperDivineDatum {
 /**
  * roguelike_topic_table.json 中 CopperModuleConsts 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface CopperModuleConsts {
   /** 原始数据字段 `copperDrawMaxNum`。 */
@@ -86,14 +86,14 @@ export interface CopperModuleConsts {
 /**
  * roguelike_topic_table.json 中 DivineType 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type DivineType = "EVENT" | "DIVINE";
 
 /**
  * roguelike_topic_table.json 中 LayerCntDesc 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type LayerCntDesc =
   | "<color=#2fac78>（已投出{0}次）</color>"
@@ -105,7 +105,7 @@ export type LayerCntDesc =
 /**
  * roguelike_topic_table.json 中 ModuleCopper 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ModuleCopper {
   /** 原始数据字段 `copperData`。 */

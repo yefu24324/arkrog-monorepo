@@ -9,7 +9,7 @@ import type { Rarity } from "../../shared/item-enums.types.js";
 /**
  * roguelike_topic_table.json 中 RewardSceneId 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type RewardSceneId =
   | "scene_ro2_taskreward3_enter"
@@ -19,7 +19,7 @@ export type RewardSceneId =
 /**
  * roguelike_topic_table.json 中 TaskDatum 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface TaskDatum {
   /** 原始数据字段 `taskId`。 */

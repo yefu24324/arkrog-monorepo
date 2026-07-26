@@ -19,7 +19,7 @@ import type {
 /**
  * roguelike_topic_table.json 中 Ro4FailEnding1 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Ro4FailEnding1 {
   /** 原始数据字段 `id`。 */
@@ -39,7 +39,7 @@ export interface Ro4FailEnding1 {
 /**
  * roguelike_topic_table.json 中 Rogue2__Mutation4 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Rogue2__Mutation4 {
   /** 原始数据字段 `id`。 */
@@ -73,7 +73,7 @@ export interface Rogue2__Mutation4 {
 /**
  * roguelike_topic_table.json 中 Rogue2_Mutation1_Class 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Rogue2_Mutation1_Class {
   /** 原始数据字段 `id`。 */
@@ -99,7 +99,7 @@ export interface Rogue2_Mutation1_Class {
 /**
  * roguelike_topic_table.json 中 Rogue3__Difficulty1 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Rogue3__Difficulty1 {
   /** 原始数据字段 `buffId`。 */
@@ -141,7 +141,7 @@ export interface Rogue3__Difficulty1 {
 /**
  * roguelike_topic_table.json 中 Rogue3__ExploreTool1 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Rogue3__ExploreTool1 {
   /** 原始数据字段 `itemId`。 */

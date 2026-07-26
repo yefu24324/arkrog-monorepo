@@ -9,7 +9,7 @@ import type { Mode, ResultType } from "../../shared/common-enums.types.js";
 /**
  * roguelike_topic_table.json 中 BattleDiceId 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type BattleDiceId =
   "rogue_2_dice_battle1" | "rogue_2_dice_battle2" | "rogue_2_dice_battle3";
@@ -17,7 +17,7 @@ export type BattleDiceId =
 /**
  * roguelike_topic_table.json 中 Dice 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Dice {
   /** 原始数据字段 `dice`。 */
@@ -35,7 +35,7 @@ export interface Dice {
 /**
  * roguelike_topic_table.json 中 DiceChoices 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface DiceChoices {
   /** 原始数据字段 `choice_ro2_wish_1`。 */
@@ -89,7 +89,7 @@ export interface DiceChoices {
 /**
  * roguelike_topic_table.json 中 DiceEvent 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface DiceEvent {
   /** 原始数据字段 `dicePointMax`。 */
@@ -117,14 +117,14 @@ export interface DiceEvent {
 /**
  * roguelike_topic_table.json 中 DiceEventShowType 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type DiceEventShowType = "VIRTUE" | "RAW_TEXT" | "MUTATION";
 
 /**
  * roguelike_topic_table.json 中 DiceEventSound 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type DiceEventSound =
   "ON_ROGUELIKE_DICEGREAT" | "ON_ROGUELIKE_DICENORMAL" | "ON_ROGUELIKE_DICEBAD";
@@ -132,7 +132,7 @@ export type DiceEventSound =
 /**
  * roguelike_topic_table.json 中 DicePredefine 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface DicePredefine {
   /** 原始数据字段 `modeId`。 */
@@ -148,7 +148,7 @@ export interface DicePredefine {
 /**
  * roguelike_topic_table.json 中 DiceRuleGroup 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface DiceRuleGroup {
   /** 原始数据字段 `ruleGroupId`。 */
@@ -160,7 +160,7 @@ export interface DiceRuleGroup {
 /**
  * roguelike_topic_table.json 中 Die 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Die {
   /** 原始数据字段 `diceId`。 */
@@ -180,7 +180,7 @@ export interface Die {
 /**
  * roguelike_topic_table.json 中 DieDescription 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type DieDescription =
   | "随处可见的六面骰子。投下后似乎能决定什么。"

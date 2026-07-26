@@ -9,7 +9,7 @@ import type { NodeTypeElement } from "../../shared/common-enums.types.js";
 /**
  * roguelike_topic_table.json 中 BattleElite 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface BattleElite {
   /** 原始数据字段 `nodeType`。 */
@@ -19,7 +19,7 @@ export interface BattleElite {
 /**
  * roguelike_topic_table.json 中 RollNodeData 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface RollNodeData {
   /** 原始数据字段 `zone_1`。 */
@@ -73,7 +73,7 @@ export interface RollNodeData {
 /**
  * roguelike_topic_table.json 中 Zone 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Zone {
   /** 原始数据字段 `zoneId`。 */
@@ -85,7 +85,7 @@ export interface Zone {
 /**
  * roguelike_topic_table.json 中 Zone1_Groups 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Zone1_Groups {
   /** 原始数据字段 `BATTLE_NORMAL`。 */
@@ -113,7 +113,7 @@ export interface Zone1_Groups {
 /**
  * roguelike_topic_table.json 中 ZonePortalNormal5_ 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ZonePortalNormal5_ {
   /** 原始数据字段 `zoneId`。 */
@@ -125,7 +125,7 @@ export interface ZonePortalNormal5_ {
 /**
  * roguelike_topic_table.json 中 ZonePortalNormal5_1_Groups 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ZonePortalNormal5_1_Groups {
   /** 原始数据字段 `INCIDENT`。 */
@@ -143,7 +143,7 @@ export interface ZonePortalNormal5_1_Groups {
 /**
  * roguelike_topic_table.json 中 ZonePortalRevival 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ZonePortalRevival {
   /** 原始数据字段 `zoneId`。 */
@@ -155,7 +155,7 @@ export interface ZonePortalRevival {
 /**
  * roguelike_topic_table.json 中 ZonePortalRevival3_Groups 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ZonePortalRevival3_Groups {
   /** 原始数据字段 `BATTLE_NORMAL`。 */

@@ -9,7 +9,7 @@ import type { EnrollId } from "../../shared/rogue-enums.types.js";
 /**
  * roguelike_topic_table.json 中 ArchiveCompEndbook 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ArchiveCompEndbook {
   /** 原始数据字段 `endbook`。 */
@@ -19,7 +19,7 @@ export interface ArchiveCompEndbook {
 /**
  * roguelike_topic_table.json 中 ClientEndbookItemData 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ClientEndbookItemData {
   /** 原始数据字段 `endBookId`。 */
@@ -41,7 +41,7 @@ export interface ClientEndbookItemData {
 /**
  * roguelike_topic_table.json 中 EndbookValue 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface EndbookValue {
   /** 原始数据字段 `endId`。 */

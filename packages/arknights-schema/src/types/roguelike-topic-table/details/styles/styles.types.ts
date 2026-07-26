@@ -9,7 +9,7 @@ import type { StyleId } from "../../shared/item-enums.types.js";
 /**
  * roguelike_topic_table.json 中 Rogue3_StyleChallengeClass 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Rogue3_StyleChallengeClass {
   /** 原始数据字段 `styleId`。 */
@@ -21,7 +21,7 @@ export interface Rogue3_StyleChallengeClass {
 /**
  * roguelike_topic_table.json 中 Styles 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Styles {
   /** 原始数据字段 `rogue_3_style_default`。 */

@@ -9,7 +9,7 @@ import type { ValidModeEnum } from "../../shared/common-enums.types.js";
 /**
  * roguelike_topic_table.json 中 Activity 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Activity {
   /** 原始数据字段 `basicDatas`。 */
@@ -21,7 +21,7 @@ export interface Activity {
 /**
  * roguelike_topic_table.json 中 ActivityTable 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ActivityTable {
   /** 原始数据字段 `SEED_MODE`。 */
@@ -31,7 +31,7 @@ export interface ActivityTable {
 /**
  * roguelike_topic_table.json 中 BasicDatas 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface BasicDatas {
   /** 原始数据字段 `rogue_4_seedmode_1`。 */
@@ -43,7 +43,7 @@ export interface BasicDatas {
 /**
  * roguelike_topic_table.json 中 BasicDatasRogue4_Seedmode1 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface BasicDatasRogue4_Seedmode1 {
   /** 原始数据字段 `id`。 */
@@ -65,7 +65,7 @@ export interface BasicDatasRogue4_Seedmode1 {
 /**
  * roguelike_topic_table.json 中 ConstData 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ConstData {
   /** 原始数据字段 `seedModeIntro`。 */
@@ -99,7 +99,7 @@ export interface ConstData {
 /**
  * roguelike_topic_table.json 中 OfficialSeedDataList 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface OfficialSeedDataList {
   /** 原始数据字段 `seed`。 */
@@ -113,7 +113,7 @@ export interface OfficialSeedDataList {
 /**
  * roguelike_topic_table.json 中 SeedMode 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface SeedMode {
   /** 原始数据字段 `rogue_4_seedmode_1`。 */
@@ -125,7 +125,7 @@ export interface SeedMode {
 /**
  * roguelike_topic_table.json 中 SeedModeRogue4_Seedmode1 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface SeedModeRogue4_Seedmode1 {
   /** 原始数据字段 `officialSeedDataList`。 */

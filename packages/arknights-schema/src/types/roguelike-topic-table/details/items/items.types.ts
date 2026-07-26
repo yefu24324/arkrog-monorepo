@@ -12,7 +12,7 @@ import type {
 /**
  * roguelike_topic_table.json 中 Item 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Item {
   /** 原始数据字段 `id`。 */
@@ -50,14 +50,14 @@ export interface Item {
 /**
  * roguelike_topic_table.json 中 ObtainApproach 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type ObtainApproach = "在集成战略模式中获得" | "步数发放" | "完成遭遇战";
 
 /**
  * roguelike_topic_table.json 中 SubType 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type SubType =
   | "NONE"
@@ -72,6 +72,6 @@ export type SubType =
 /**
  * roguelike_topic_table.json 中 TinyIconColor 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type TinyIconColor = "33a8e2" | "02d3ae" | "008aff" | "ffffff";

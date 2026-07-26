@@ -2,13 +2,16 @@
 
 `ArknightsGameData` 的 TypeScript 类型定义与 Zod 数据校验内部库。
 
-首期完整覆盖 `zh_CN/gamedata/excel/roguelike_topic_table.json`。初始类型由本地工具根据完整数据一次性生成；进入维护阶段后，TypeScript 类型、Zod Schema、注释和文档均作为人工维护源码，游戏更新只做针对性局部修改。
+当前完整覆盖 `zh_CN/gamedata/excel/roguelike_topic_table.json` 与
+`zh_CN/gamedata/battle/buff_template_data.json`。初始类型由本地工具根据完整数据一次性生成；
+进入维护阶段后，TypeScript 类型、Zod Schema 和注释均作为人工维护源码，
+游戏更新只做针对性局部修改。
 
 ## 常用命令
 
 ```bash
-# 仅供尚无任何类型时执行首次全量初始化；已有类型时命令会拒绝覆盖。
-pnpm schema:bootstrap
+# 仅供目标表尚无任何类型时执行首次全量初始化；已有类型时会拒绝覆盖。
+pnpm schema:bootstrap -- --file zh_CN/gamedata/battle/buff_template_data.json
 
 # 分析指定 JSON 与现有 Zod 的不一致，并定位具体 Schema/Type。
 pnpm schema:analyze -- --file zh_CN/gamedata/excel/roguelike_topic_table.json
@@ -19,13 +22,12 @@ pnpm schema:inspect
 # 使用严格 Zod Schema 校验完整数据表。
 pnpm schema:validate
 
-# 执行包级类型检查、测试、构建和文档完整性检查。
+# 执行包级类型检查、测试和构建。
 pnpm --filter @arkrog/arknights-schema typecheck
 pnpm --filter @arkrog/arknights-schema test
 pnpm --filter @arkrog/arknights-schema build
-pnpm --filter @arkrog/arknights-schema docs:check
 
-# 组装并预览自动生成的类型文档站（Fumadocs）。
+# 直接从 TypeScript/JSDoc 生成并预览类型文档站；不会创建 Schema Markdown。
 pnpm schema:docs:generate
 pnpm schema:docs:dev
 ```
@@ -39,14 +41,15 @@ pnpm schema:docs:dev
 ### 首次 Bootstrap
 
 - 仅在目标 JSON 尚无任何类型、Schema 和人工说明时运行全量生成。
-- Bootstrap 根据完整真实数据建立初始结构、目录、类型一致性测试与文档。
+- 使用 `--file <ArknightsGameData 内相对路径>` 选择已登记的 Bootstrap 配置。
+- Bootstrap 根据完整真实数据建立初始结构、目录与类型一致性测试。
 - 如果检测到已有根类型，工具会直接失败，避免覆盖人工注释或局部修正。
 
 ### 后续局部维护
 
 1. 运行 `schema:analyze`，通过现有严格 Zod Schema 校验真实数据。
 2. 从报告读取 JSON Pointer、不一致的 `XxxSchema`、显式类型及源码路径。
-3. 只修改报告涉及的 TypeScript 类型、Zod Schema、注释、文档和相关测试。
+3. 只修改报告涉及的 TypeScript 类型、Zod Schema、注释和相关测试。
 4. 运行全量校验与类型一致性测试；不要重新执行 Bootstrap。
 
 ## 建模约定
@@ -55,8 +58,8 @@ pnpm schema:docs:dev
 - 单模块通常控制在 8～12 个定义以内；超大目录继续按子语义拆分。
 - 目录镜像原表的 JSON 字段路径，例如 `details/stages`、`details/relics`、`modules/grid-zone`。
 - 被多个 JSON 区块复用的定义统一放入 `roguelike-topic-table/shared`。
-- 每个定义都带有源码注释；每个 Type/Schema 逻辑模块对应一份中文 Markdown，页面内按类型分章节。
+- 每个定义和字段都在 TypeScript JSDoc 与 Zod `.describe()` 中维护中文语义说明。
 - 只在 `src/types/index.ts` 与 `src/schemas/index.ts` 保留公共出口，不为每个小目录生成 `index.ts`。
 - Zod 对象使用严格模式；游戏更新新增未知字段时校验会失败并给出 JSON 路径。
 - 空数组被建模为 `never[]`，确保首次出现元素时能被变化检查捕获。
-- Markdown 中保留 `MANUAL` 标记用于区分人工说明；维护阶段不会重新生成或覆盖整个文档。
+- `buff_template_data` 中的递归 Action 按 CLR `$type` 建模为严格判别联合，嵌套节点通过惰性 Schema 闭环。

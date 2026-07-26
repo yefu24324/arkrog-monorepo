@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "docs:generate": "tsx scripts/generate-docs.ts",
+    "graph:build": "pnpm --filter @arkrog/arknights-knowledge-graph build",
+    "docs:generate": "pnpm graph:build && tsx scripts/generate-docs.ts",
     "predev": "pnpm docs:generate",
     "dev": "next dev",
     "prebuild": "pnpm docs:generate && fumadocs-mdx",
@@ -15,6 +16,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@arkrog/arknights-knowledge-graph": "workspace:*",
     "cnfast": "^0.0.8",
     "fumadocs-core": "16.11.5",
     "fumadocs-mdx": "15.2.0",

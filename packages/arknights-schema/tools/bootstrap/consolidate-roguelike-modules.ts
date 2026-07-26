@@ -2,7 +2,7 @@
  * 把首次 Bootstrap 产生的“一定义一文件”布局聚合为逻辑模块布局。
  *
  * 本工具只接受尚未聚合的 Bootstrap 产物；检测到 `.types.ts` 时会拒绝运行，避免
- * 在维护阶段覆盖人工修改。迁移会保留定义、JSDoc、Schema 实现和 MD 人工说明。
+ * 在维护阶段覆盖人工修改。迁移会保留定义、JSDoc 与 Schema 实现。
  */
 
 import fs from "node:fs";
@@ -10,13 +10,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
-/** 单个 TypeScript 类型定义及其原始文档。 */
+/** 单个 TypeScript 类型定义。 */
 interface TypeDefinitionRecord {
   dependencies: Set<string>;
   directory: string;
   name: string;
   sourceText: string;
-  originalDocumentPath: string;
 }
 
 /** 单个 Zod Schema 定义。 */
@@ -41,16 +40,14 @@ interface OutputFile {
   content: string;
 }
 
-/** 当前包与三个镜像目录。 */
+/** 当前包与 Type/Schema 镜像目录。 */
 const CURRENT_FILE = fileURLToPath(import.meta.url);
 const PACKAGE_ROOT = path.resolve(path.dirname(CURRENT_FILE), "../..");
 const TABLE_DIRECTORY = "roguelike-topic-table";
 const TYPES_ROOT = path.resolve(PACKAGE_ROOT, "src", "types");
 const SCHEMAS_ROOT = path.resolve(PACKAGE_ROOT, "src", "schemas");
-const DOCS_ROOT = path.resolve(PACKAGE_ROOT, "docs", "types");
 const TABLE_TYPES_ROOT = path.resolve(TYPES_ROOT, TABLE_DIRECTORY);
 const TABLE_SCHEMAS_ROOT = path.resolve(SCHEMAS_ROOT, TABLE_DIRECTORY);
-const TABLE_DOCS_ROOT = path.resolve(DOCS_ROOT, TABLE_DIRECTORY);
 
 /** shared 目录中跨路径类型的稳定语义分组。 */
 const SHARED_GROUPS: Readonly<Record<string, readonly string[]>> = {
@@ -228,11 +225,6 @@ function readTypeDefinitions(): TypeDefinitionRecord[] {
   const knownNames = new Set(preliminary.map((record) => record.name));
 
   return preliminary.map((record) => {
-    const relativePath = path.relative(TABLE_TYPES_ROOT, record.filePath);
-    const originalDocumentPath = path.resolve(
-      TABLE_DOCS_ROOT,
-      relativePath.replace(/\.ts$/, ".md"),
-    );
     return {
       dependencies: collectReferencedNames(
         record.definition,
@@ -241,7 +233,6 @@ function readTypeDefinitions(): TypeDefinitionRecord[] {
       ),
       directory: record.directory,
       name: record.name,
-      originalDocumentPath,
       sourceText: record.sourceText,
     };
   });
@@ -375,15 +366,6 @@ function resolveModuleSchemaPath(module: LogicalModule): string {
   );
 }
 
-/** 获取模块的合并 Markdown 文件绝对路径。 */
-function resolveModuleDocumentPath(module: LogicalModule): string {
-  return path.resolve(
-    TABLE_DOCS_ROOT,
-    module.directory,
-    `${module.name}.md`,
-  );
-}
-
 /** 按目标模块聚合 import 名称。 */
 function addImport(
   imports: Map<string, Set<string>>,
@@ -506,44 +488,6 @@ function renderSchemaModule(
   return `${[header, importLines.join("\n"), definitions].join("\n\n")}\n`;
 }
 
-/** 将单类型 MD 降一级标题并更新为模块级源码路径。 */
-function renderDocumentSection(
-  definition: TypeDefinitionRecord,
-  module: LogicalModule,
-): string {
-  if (!fs.existsSync(definition.originalDocumentPath)) {
-    throw new Error(`${definition.name} 缺少原始 Markdown 文档。`);
-  }
-  const typePath = toPosixPath(
-    path.relative(PACKAGE_ROOT, resolveModuleTypePath(module)),
-  );
-  const schemaPath = toPosixPath(
-    path.relative(PACKAGE_ROOT, resolveModuleSchemaPath(module)),
-  );
-  return fs
-    .readFileSync(definition.originalDocumentPath, "utf8")
-    .replace(/^(#{1,5}) /gm, "#$1 ")
-    .replace(/^- TypeScript：`[^`]+`/m, `- TypeScript：\`${typePath}\``)
-    .replace(/^- Zod Schema：`[^`]+`/m, `- Zod Schema：\`${schemaPath}\``)
-    .trim();
-}
-
-/** 渲染与 Type/Schema 模块一一对应的合并中文文档。 */
-function renderModuleDocument(module: LogicalModule): string {
-  const lines = [
-    `# ${module.name}`,
-    "",
-    `本页记录 JSON 逻辑模块 \`${module.directory || TABLE_DIRECTORY}\` 中的 ${module.typeDefinitions.length} 个强关联类型及其 Schema。`,
-    "",
-  ];
-  for (const definition of module.typeDefinitions.sort((left, right) =>
-    left.name.localeCompare(right.name),
-  )) {
-    lines.push(renderDocumentSection(definition, module), "");
-  }
-  return `${lines.join("\n").trim()}\n`;
-}
-
 /** 渲染包级唯一公共出口，避免为每个小目录生成 index.ts。 */
 function renderRootBarrel(modules: LogicalModule[], schema: boolean): string {
   const root = schema ? SCHEMAS_ROOT : TYPES_ROOT;
@@ -574,12 +518,11 @@ function assertTableDirectory(directory: string, expectedParent: string): void {
   }
 }
 
-/** 在内存完成全部迁移后，替换三个表目录并更新公共出口。 */
+/** 在内存完成全部迁移后，替换 Type/Schema 表目录并更新公共出口。 */
 function writeOutputs(outputs: OutputFile[]): void {
   assertTableDirectory(TABLE_TYPES_ROOT, TYPES_ROOT);
   assertTableDirectory(TABLE_SCHEMAS_ROOT, SCHEMAS_ROOT);
-  assertTableDirectory(TABLE_DOCS_ROOT, DOCS_ROOT);
-  for (const directory of [TABLE_TYPES_ROOT, TABLE_SCHEMAS_ROOT, TABLE_DOCS_ROOT]) {
+  for (const directory of [TABLE_TYPES_ROOT, TABLE_SCHEMAS_ROOT]) {
     fs.rmSync(directory, { force: true, recursive: true });
   }
   for (const output of outputs) {
@@ -616,10 +559,6 @@ export function consolidateRoguelikeModules(): void {
         absolutePath: resolveModuleSchemaPath(module),
         content: renderSchemaModule(module, moduleByType, moduleBySchema),
       },
-      {
-        absolutePath: resolveModuleDocumentPath(module),
-        content: renderModuleDocument(module),
-      },
     );
   }
   outputs.push(
@@ -634,7 +573,7 @@ export function consolidateRoguelikeModules(): void {
   );
   writeOutputs(outputs);
   console.log(
-    `已将 ${typeDefinitions.length} 个定义聚合为 ${modules.length} 个 Type 模块、Schema 模块和对应 MD。`,
+    `已将 ${typeDefinitions.length} 个定义聚合为 ${modules.length} 个 Type 与 Schema 模块。`,
   );
 }
 

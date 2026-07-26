@@ -7,7 +7,7 @@
 /**
  * roguelike_topic_table.json 中 ChoiceScene 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ChoiceScene {
   /** 原始数据字段 `id`。 */
@@ -29,6 +29,6 @@ export interface ChoiceScene {
 /**
  * roguelike_topic_table.json 中 TitleIcon 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type TitleIcon = "title_icon_task" | "title_icon_task_reward" | "";

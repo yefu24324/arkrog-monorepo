@@ -1,5 +1,5 @@
 /**
- * 仅在首次建模时根据完整 roguelike_topic_table.json 初始化类型、Schema 与中文文档。
+ * 仅在首次建模时根据完整 roguelike_topic_table.json 初始化类型与 Schema。
  *
  * 生成器会先把主题 ID 字典转换为样本数组，让推断器合并所有主题的可选字段；
  * 输出根类型时再恢复为 Record。已有类型禁止再次运行本脚本覆盖，后续游戏更新应由
@@ -17,11 +17,14 @@ import {
   quicktype,
 } from "quicktype-core";
 import { consolidateRoguelikeModules } from "./bootstrap/consolidate-roguelike-modules.js";
+import { bootstrapBuffTemplateData } from "./bootstrap/generate-buff-template-data.js";
 
 /** 命令行解析后的生成选项。 */
 interface CliOptions {
   initial: boolean;
   dataRoot: string;
+  /** 显式指定的目标 JSON；未传入时保留旧的 roguelike 首次生成入口。 */
+  file: string | null;
 }
 
 /** 等待写入或检查的单个生成产物。 */
@@ -127,12 +130,6 @@ const SEMANTIC_DESCRIPTIONS = new Map<string, SemanticDescription>([
   ],
 ]);
 
-/** Markdown 人工说明区的起始标记。 */
-const MANUAL_START = "<!-- MANUAL:START -->";
-
-/** Markdown 人工说明区的结束标记。 */
-const MANUAL_END = "<!-- MANUAL:END -->";
-
 /** 当前脚本及包目录位置。 */
 const CURRENT_FILE = fileURLToPath(import.meta.url);
 const PACKAGE_ROOT = path.resolve(path.dirname(CURRENT_FILE), "..");
@@ -164,6 +161,7 @@ function toFileStem(typeName: string): string {
 function parseCliOptions(argv: string[]): CliOptions {
   let initial = false;
   let dataRoot = process.env.ARKNIGHTS_GAME_DATA_PATH ?? DEFAULT_DATA_ROOT;
+  let file: string | null = null;
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -180,10 +178,26 @@ function parseCliOptions(argv: string[]): CliOptions {
       index += 1;
       continue;
     }
+    if (argument === "--file") {
+      const candidate = argv[index + 1];
+      if (!candidate) throw new Error("--file 后必须提供目标 JSON 路径。");
+      file = candidate;
+      index += 1;
+      continue;
+    }
     throw new Error(`无法识别的参数：${argument}`);
   }
 
-  return { initial, dataRoot: path.resolve(dataRoot) };
+  return { initial, dataRoot: path.resolve(dataRoot), file };
+}
+
+/** 将用户输入的目标路径规范化为 ArknightsGameData 内相对路径。 */
+function normalizeTargetPath(input: string, dataRoot: string): string {
+  const direct = path.resolve(input);
+  const absolutePath = fs.existsSync(direct)
+    ? direct
+    : path.resolve(dataRoot, input.replace(/^ArknightsGameData[\\/]/, ""));
+  return toPosixPath(path.relative(dataRoot, absolutePath));
 }
 
 /** 读取 JSON，并给解析异常补充清晰的数据文件位置。 */
@@ -451,17 +465,6 @@ function resolveSchemaPath(location: DefinitionLocation): string {
   );
 }
 
-/** 获取指定定义在中文文档目录中的绝对文件位置。 */
-function resolveDocumentPath(location: DefinitionLocation): string {
-  return path.resolve(
-    PACKAGE_ROOT,
-    "docs",
-    "types",
-    location.directory,
-    `${location.stem}.md`,
-  );
-}
-
 /** 计算两个生成文件之间带 .js 后缀的 NodeNext 相对 import 路径。 */
 function createImportSpecifier(fromPath: string, toPath: string): string {
   const relativePath = toPosixPath(path.relative(path.dirname(fromPath), toPath))
@@ -594,7 +597,7 @@ function renderTypeFile(
     "/**",
     ` * ${semantics?.description ?? `roguelike_topic_table.json 中 ${name} 的显式 TypeScript 定义。`}`,
     " *",
-    " * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。",
+    " * 字段语义应直接维护在类型与字段的源码注释中。",
     " */",
   );
 
@@ -701,75 +704,6 @@ function renderSchemaFile(
   lines.push(
     "})",
     `  .describe(${JSON.stringify(description)}) satisfies z.ZodType<${name}>;`,
-    "",
-  );
-  return lines.join("\n");
-}
-
-/** 从既有 Markdown 中提取人工说明区，重新生成时原样保留。 */
-function readManualSection(filePath: string): string {
-  if (!fs.existsSync(filePath)) return "待补充。";
-  const content = fs.readFileSync(filePath, "utf8");
-  const start = content.indexOf(MANUAL_START);
-  const end = content.indexOf(MANUAL_END);
-  if (start < 0 || end < start) return "待补充。";
-  return content.slice(start + MANUAL_START.length, end).trim() || "待补充。";
-}
-
-/** 转义 Markdown 表格单元格中的竖线与换行。 */
-function escapeMarkdownCell(value: string): string {
-  return value.replaceAll("|", "\\|").replaceAll("\n", " ");
-}
-
-/** 为一个类型及其对应 Schema 渲染中文 Markdown 文档。 */
-function renderMarkdownDocument(
-  definition: Definition,
-  sourceFile: ts.SourceFile,
-  manualSection: string,
-  location: DefinitionLocation,
-): string {
-  const name = definition.name.text;
-  const typeFile = `src/types/${location.directory}/${location.stem}.ts`;
-  const schemaFile = `src/schemas/${location.directory}/${location.stem}.schema.ts`;
-  const lines = [
-    `# ${name}`,
-    "",
-    `\`${name}\` 来源于 \`roguelike_topic_table.json\` 的完整主题样本；对应 Zod 定义为 \`${name}Schema\`。`,
-    "",
-    `- TypeScript：\`${typeFile}\``,
-    `- Zod Schema：\`${schemaFile}\``,
-    "- 数据源：`zh_CN/gamedata/excel/roguelike_topic_table.json`",
-    "",
-  ];
-
-  if (ts.isInterfaceDeclaration(definition)) {
-    lines.push("## 字段", "", "| 字段 | TypeScript 类型 | 必需 |", "|---|---|---|");
-    for (const member of definition.members) {
-      if (!ts.isPropertySignature(member) || !member.type) continue;
-      const propertyName = readPropertyName(member.name);
-      const typeText = renderTypeNode(member.type, sourceFile, name, propertyName);
-      lines.push(
-        `| \`${escapeMarkdownCell(propertyName)}\` | \`${escapeMarkdownCell(typeText)}\` | ${member.questionToken ? "否" : "是"} |`,
-      );
-    }
-    lines.push("");
-  } else {
-    lines.push(
-      "## 字面量范围",
-      "",
-      `\`${escapeMarkdownCell(renderTypeNode(definition.type, sourceFile, name))}\``,
-      "",
-    );
-  }
-
-  lines.push(
-    "## 人工说明",
-    "",
-    MANUAL_START,
-    "",
-    manualSection,
-    "",
-    MANUAL_END,
     "",
   );
   return lines.join("\n");
@@ -945,15 +879,6 @@ function createArtifacts(
     const dependencies = collectTypeDependencies(definition, knownNames, name);
     const typePath = resolveTypePath(location);
     const schemaPath = resolveSchemaPath(location);
-    const docPath = resolveDocumentPath(location);
-    const legacyDocPath = path.resolve(
-      PACKAGE_ROOT,
-      "docs",
-      "types",
-      `${location.stem}.md`,
-    );
-    const manualSourcePath = fs.existsSync(docPath) ? docPath : legacyDocPath;
-
     artifacts.push(
       {
         absolutePath: typePath,
@@ -973,15 +898,6 @@ function createArtifacts(
           dependencies,
           schemaPath,
           locations,
-        ),
-      },
-      {
-        absolutePath: docPath,
-        content: renderMarkdownDocument(
-          definition,
-          sourceFile,
-          readManualSection(manualSourcePath),
-          location,
         ),
       },
     );
@@ -1034,7 +950,6 @@ function writeArtifacts(artifacts: Artifact[]): void {
   const generatedDirectories = [
     path.resolve(PACKAGE_ROOT, "src", "types", "roguelike-topic-table"),
     path.resolve(PACKAGE_ROOT, "src", "schemas", "roguelike-topic-table"),
-    path.resolve(PACKAGE_ROOT, "docs", "types", "roguelike-topic-table"),
   ];
 
   for (const directory of generatedDirectories) {
@@ -1046,7 +961,7 @@ function writeArtifacts(artifacts: Artifact[]): void {
     fs.mkdirSync(path.dirname(artifact.absolutePath), { recursive: true });
     fs.writeFileSync(artifact.absolutePath, artifact.content, "utf8");
   }
-  console.log(`已生成 ${artifacts.length} 个类型、Schema、测试与文档产物。`);
+  console.log(`已生成 ${artifacts.length} 个类型、Schema 与测试产物。`);
 }
 
 /** 运行完整生成或只读结构检查流程。 */
@@ -1056,6 +971,21 @@ async function main(): Promise<void> {
     throw new Error(
       "该脚本仅用于初次全量建模。请显式传入 --initial；已有类型的游戏更新应使用 schema:analyze 并局部修改。",
     );
+  }
+
+  if (options.file) {
+    const target = normalizeTargetPath(options.file, options.dataRoot);
+    if (target === "zh_CN/gamedata/battle/buff_template_data.json") {
+      console.log(`正在全量 Bootstrap ${target}`);
+      const statistics = bootstrapBuffTemplateData(options.dataRoot);
+      console.log(
+        `已生成 ${statistics.actionTypes} 个 Action 分支、${statistics.events} 个事件和 ${statistics.artifacts} 个产物。`,
+      );
+      return;
+    }
+    if (target !== toPosixPath(TABLE_RELATIVE_PATH)) {
+      throw new Error(`Bootstrap 尚未登记目标数据表：${target}`);
+    }
   }
 
   const existingRootType = path.resolve(

@@ -9,7 +9,7 @@ import type { ZoneId } from "../../shared/item-enums.types.js";
 /**
  * roguelike_topic_table.json 中 ArchiveCompChat 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ArchiveCompChat {
   /** 原始数据字段 `chat`。 */
@@ -19,7 +19,7 @@ export interface ArchiveCompChat {
 /**
  * roguelike_topic_table.json 中 ChatItemList 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ChatItemList {
   /** 原始数据字段 `floor`。 */
@@ -35,7 +35,7 @@ export interface ChatItemList {
 /**
  * roguelike_topic_table.json 中 ChatValue 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ChatValue {
   /** 原始数据字段 `sortId`。 */

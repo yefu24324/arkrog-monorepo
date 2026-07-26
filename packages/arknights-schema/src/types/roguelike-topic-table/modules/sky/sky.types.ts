@@ -7,14 +7,14 @@
 /**
  * roguelike_topic_table.json 中 EffId 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type EffId = "sp_green" | "sp_cyan";
 
 /**
  * roguelike_topic_table.json 中 NodeDatum 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface NodeDatum {
   /** 原始数据字段 `evtType`。 */
@@ -38,7 +38,7 @@ export interface NodeDatum {
 /**
  * roguelike_topic_table.json 中 Sky 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Sky {
   /** 原始数据字段 `nodeData`。 */
@@ -52,7 +52,7 @@ export interface Sky {
 /**
  * roguelike_topic_table.json 中 SkyModuleConsts 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface SkyModuleConsts {
   /** 原始数据字段 `skyApItemId`。 */
@@ -66,7 +66,7 @@ export interface SkyModuleConsts {
 /**
  * roguelike_topic_table.json 中 SkySubTypeDatum 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface SkySubTypeDatum {
   /** 原始数据字段 `evtType`。 */

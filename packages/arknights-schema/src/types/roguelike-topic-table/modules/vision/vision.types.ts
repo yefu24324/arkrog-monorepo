@@ -7,7 +7,7 @@
 /**
  * roguelike_topic_table.json 中 Vision 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Vision {
   /** 原始数据字段 `visionDatas`。 */
@@ -21,7 +21,7 @@ export interface Vision {
 /**
  * roguelike_topic_table.json 中 VisionChoice 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface VisionChoice {
   /** 原始数据字段 `value`。 */
@@ -33,14 +33,14 @@ export interface VisionChoice {
 /**
  * roguelike_topic_table.json 中 VisionChoiceType 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type VisionChoiceType = "LOWER";
 
 /**
  * roguelike_topic_table.json 中 VisionData 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface VisionData {
   /** 原始数据字段 `sightNum`。 */
@@ -66,7 +66,7 @@ export interface VisionData {
 /**
  * roguelike_topic_table.json 中 VisionModuleConsts 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface VisionModuleConsts {
   /** 原始数据字段 `maxVision`。 */

@@ -9,7 +9,7 @@ import type { BuyConfirm } from "../../shared/rewards.types.js";
 /**
  * roguelike_topic_table.json 中 ScrapShopDialogData 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ScrapShopDialogData {
   /** 原始数据字段 `types`。 */
@@ -19,7 +19,7 @@ export interface ScrapShopDialogData {
 /**
  * roguelike_topic_table.json 中 ScrapShopDialogDataTypes 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface ScrapShopDialogDataTypes {
   /** 原始数据字段 `BUY_SELECT`。 */

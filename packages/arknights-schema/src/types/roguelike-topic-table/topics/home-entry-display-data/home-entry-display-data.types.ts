@@ -7,7 +7,7 @@
 /**
  * 集成战略主题在一个指定时间窗口内使用的首页入口展示配置。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface HomeEntryDisplayDatum {
   /** 所属集成战略主题 ID，应与外层 topics 字典键及 Topic.id 一致。 */

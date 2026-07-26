@@ -7,7 +7,7 @@
 /**
  * roguelike_topic_table.json 中 RelicTipsData 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface RelicTipsData {
   /** 原始数据字段 `rogue_5_relic_explore_5`。 */
@@ -27,7 +27,7 @@ export interface RelicTipsData {
 /**
  * roguelike_topic_table.json 中 Rogue5__ 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Rogue5__ {
   /** 原始数据字段 `itemId`。 */

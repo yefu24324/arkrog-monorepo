@@ -7,7 +7,7 @@
 /**
  * roguelike_topic_table.json 中 SanCheck 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface SanCheck {
   /** 原始数据字段 `sanRanges`。 */
@@ -19,7 +19,7 @@ export interface SanCheck {
 /**
  * roguelike_topic_table.json 中 SanCheckModuleConsts 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface SanCheckModuleConsts {
   /** 原始数据字段 `sanDecreaseToast`。 */
@@ -29,7 +29,7 @@ export interface SanCheckModuleConsts {
 /**
  * roguelike_topic_table.json 中 SanRange 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface SanRange {
   /** 原始数据字段 `sanMax`。 */

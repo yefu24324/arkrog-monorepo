@@ -7,28 +7,28 @@
 /**
  * roguelike_topic_table.json 中 CapsulePool 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type CapsulePool = "pool_capsule_default";
 
 /**
  * roguelike_topic_table.json 中 Code 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type Code = "ISW-NO" | "ISW-DF" | "ISW-DU" | "ISW-SP" | " ";
 
 /**
  * roguelike_topic_table.json 中 DifficultyEnum 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type DifficultyEnum = "NORMAL" | "FOUR_STAR";
 
 /**
  * roguelike_topic_table.json 中 LoadingPicId 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type LoadingPicId =
   | "loading_PCS"
@@ -41,14 +41,14 @@ export type LoadingPicId =
 /**
  * roguelike_topic_table.json 中 RedCapsulePool 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export type RedCapsulePool = "pool_capsule_red";
 
 /**
  * roguelike_topic_table.json 中 Stage 的显式 TypeScript 定义。
  *
- * 字段语义可在对应中文 Markdown 文档的人工说明区继续补充。
+ * 字段语义应直接维护在类型与字段的源码注释中。
  */
 export interface Stage {
   /** 原始数据字段 `id`。 */
