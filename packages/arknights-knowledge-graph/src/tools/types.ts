@@ -1,5 +1,4 @@
-/** 图谱中可追溯结论的证据强度。 */
-export type EvidenceStatus = "verified" | "inferred" | "unknown";
+import type { EvidenceStatus } from "../lib/types.js";
 
 /** 构建图谱时使用的仓库路径集合。 */
 export interface RepositoryPaths {
@@ -46,3 +45,5 @@ export interface TraceRow {
   /** 原始 JSON 路径。 */
   jsonPath: string;
 }
+
+export type { EvidenceStatus };

@@ -72,9 +72,15 @@ pnpm graph:cypher "MATCH (i:Item)-[:ITEM_HAS_EFFECT]->(e:Effect)-[:EFFECT_USES_M
 
 ```powershell
 pnpm graph:export rogue_6
+pnpm graph:export:all
 ```
 
-按 `Item.itemType = RELIC` 的原始数据口径核对真正藏品，并同时覆盖 `relics` 和关联的 `charBuffData`。默认输出到 `docs/game/<主题名>/<主题名>藏品乘区与生效条件表.json`。导出器只读取图中预测，不应自行维护第二套分类器。
+按 `Item.itemType = RELIC` 的原始数据口径核对真正藏品，并同时覆盖 `relics` 和关联的 `charBuffData`。每个主题输出两份独立产物：
+
+- `docs/game/relic-zone-validation/graph/rogue_N.json` 只读取图中 `EFFECT_ENTERS_ZONE` 预测。
+- `docs/game/relic-zone-validation/formula/rogue_N.json` 使用官方公式贡献程序输出实际可写入乘区，默认全部 buff 生效且不求公式数值；它不是第二套分类器。
+
+`docs/game/relic-zone-validation/human/` 只保存稀疏人工修正，未记录藏品在文档站回退到 formula。human 禁止被生产建图、分类、查询或公式程序读取。
 
 验证 JSON 能被正常解析，并核对顶层 `schemaVersion`、`scope.itemCount`、`scope.effectCount` 和 `items[].effects[]`。每条效果应保留零基 `buffIndex`、原始黑板、分类状态、预测数组、规则 ID、证据路径与原始 JSON 路径。
 
@@ -106,10 +112,14 @@ pnpm graph:build
 
 用户要求新增或修正规则时先读取：
 
-- `packages/arknights-knowledge-graph/src/domain/damage-zones.ts`
-- `packages/arknights-knowledge-graph/src/domain/engine-rules.ts`
+- `packages/arknights-knowledge-graph/src/lib/domain/damage-zones.ts`
+- `packages/arknights-knowledge-graph/src/lib/domain/engine-rules.ts`
 - `packages/arknights-knowledge-graph/test/damage-zones.test.ts`
 - 对应 GameData、战斗模板和 `docs/game/knowledge-graph/relic-zone-expectations.json`
+
+对外纯 TS 在 `src/lib/`；Kuzu/CLI/export 在 `src/tools/`。
+藏品进公式簿：`src/lib/formula/relic-programs.ts`（`routeRelicBuffToZones` / `applyRelicBuffsToFormulaContext`），不生成按藏品 ID 总表。
+
 
 每条规则必须包含稳定 ID、`version`、目标乘区、`status`、`confidence`、说明和声明式条件。修改已有语义时递增版本。`damage-zones.ts` 只定义公式乘区，不参与推断。代码必须添加中文注释。
 

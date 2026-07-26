@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { DAMAGE_ZONES } from "../src/domain/damage-zones.js";
+import { DAMAGE_ZONES } from "../src/lib/domain/damage-zones.js";
 import {
   FORMULA_DAMAGE_ZONES,
   FormulaContext,
@@ -8,7 +8,7 @@ import {
   explainDamageFormula,
   renderDamageFormula,
   type FormulaInputs,
-} from "../src/formula/index.js";
+} from "../src/lib/formula/index.js";
 
 /** 创建覆盖完整伤害预览所需的最小输入。 */
 function createFormulaInputs(): FormulaInputs {

@@ -8,8 +8,8 @@ import {
   ENGINE_FIELD_PATHS,
   extractMechanicActionFacts,
   predictEngineZones,
-} from "../src/domain/engine-rules.js";
-import { resolveRepositoryPaths } from "../src/paths.js";
+} from "../src/lib/domain/engine-rules.js";
+import { resolveRepositoryPaths } from "../src/tools/paths.js";
 
 /** 人工期望夹具的一条稳定 ID 用例。 */
 interface ExpectationCase {

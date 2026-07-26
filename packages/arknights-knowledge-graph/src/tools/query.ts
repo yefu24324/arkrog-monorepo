@@ -1,6 +1,6 @@
 import type { Connection, KuzuValue } from "kuzu";
 
-import { ENGINE_FIELD_PATHS } from "./domain/engine-rules.js";
+import { ENGINE_FIELD_PATHS } from "../lib/domain/engine-rules.js";
 import { closeGraph, openGraph, rowsFromResult } from "./graph/database.js";
 import { resolveRepositoryPaths } from "./paths.js";
 import type { EvidenceStatus, TraceRow } from "./types.js";

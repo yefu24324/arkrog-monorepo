@@ -6,7 +6,8 @@ import type { RepositoryPaths } from "./types.js";
 /** 从当前包位置解析 monorepo 根目录，不依赖调用命令时的工作目录。 */
 export function resolveRepositoryPaths(databaseOverride?: string): RepositoryPaths {
   const packageDirectory = path.dirname(fileURLToPath(import.meta.url));
-  const root = path.resolve(packageDirectory, "../../..");
+  // src/tools → 包根 → packages → monorepo 根
+  const root = path.resolve(packageDirectory, "../../../..");
 
   return {
     root,

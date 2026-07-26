@@ -1,6 +1,7 @@
 import type { DamageZoneId } from "./damage-zones.js";
 import type { EvidenceStatus } from "../types.js";
 
+
 /** 从战斗模板 Action AST 提取的可查询事实。 */
 export interface MechanicActionFact {
   /** 所属战斗事件。 */

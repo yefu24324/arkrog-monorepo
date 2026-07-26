@@ -5,19 +5,28 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./dist/lib/index.d.ts",
+      "import": "./dist/lib/index.js"
+    },
+    "./classify": {
+      "types": "./dist/lib/classify/index.d.ts",
+      "import": "./dist/lib/classify/index.js"
+    },
+    "./formula": {
+      "types": "./dist/lib/formula/index.d.ts",
+      "import": "./dist/lib/formula/index.js"
     }
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "graph:build": "tsx src/cli.ts build",
-    "graph:export": "tsx src/cli.ts export",
-    "graph:ask": "tsx src/cli.ts ask",
-    "graph:trace": "tsx src/cli.ts trace",
-    "graph:cypher": "tsx src/cli.ts cypher"
+    "graph:build": "tsx src/tools/cli.ts build",
+    "graph:export": "tsx src/tools/cli.ts export",
+    "graph:export:all": "tsx src/tools/cli.ts export all",
+    "graph:ask": "tsx src/tools/cli.ts ask",
+    "graph:trace": "tsx src/tools/cli.ts trace",
+    "graph:cypher": "tsx src/tools/cli.ts cypher"
   },
   "dependencies": {
     "@arkrog/arknights-schema": "workspace:*",

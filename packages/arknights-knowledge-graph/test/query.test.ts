@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { runCypher } from "../src/query.js";
+import { runCypher } from "../src/tools/query.js";
 
 describe("原始 Cypher 查询保护", () => {
   it("在进入原生驱动前拒绝多条 Cypher", async () => {

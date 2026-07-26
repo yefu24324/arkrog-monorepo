@@ -5,13 +5,13 @@ import path from "node:path";
 import { RoguelikeTopicTableSchema } from "@arkrog/arknights-schema";
 import type { Connection, KuzuValue } from "kuzu";
 
-import { DAMAGE_ZONES } from "./domain/damage-zones.js";
+import { DAMAGE_ZONES } from "../lib/domain/damage-zones.js";
 import {
   ENGINE_SEMANTIC_RULES,
   extractMechanicActionFacts,
   predictEngineZones,
   type MechanicActionFact,
-} from "./domain/engine-rules.js";
+} from "../lib/domain/engine-rules.js";
 import { closeGraph, executeBatch, openGraph } from "./graph/database.js";
 import { createGraphSchema } from "./graph/schema.js";
 import { resolveRepositoryPaths, toRepositoryPath } from "./paths.js";
@@ -381,7 +381,7 @@ function collectDomainKnowledge(dataset: GraphDataset): void {
         status: rule.status,
         confidence: rule.confidence,
         reason: `${rule.name}：${rule.description}`,
-        evidencePath: `packages/arknights-knowledge-graph/src/domain/engine-rules.ts#${rule.id}`,
+        evidencePath: `packages/arknights-knowledge-graph/src/lib/domain/engine-rules.ts#${rule.id}`,
       });
     }
   }

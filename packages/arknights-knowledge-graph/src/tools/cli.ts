@@ -3,7 +3,7 @@
 import { access } from "node:fs/promises";
 
 import { buildKnowledgeGraph } from "./build.js";
-import { exportRelicZoneJson } from "./export.js";
+import { exportRelicZoneJson, listRelicZoneTopicIds } from "./export-json.js";
 import { resolveRepositoryPaths } from "./paths.js";
 import { answerQuestion, runCypher, traceItem } from "./query.js";
 
@@ -19,7 +19,6 @@ interface CliArguments {
 
 /** 解析 `--db`，其余参数保持为自然语言或 Cypher 文本。 */
 function parseArguments(arguments_: string[]): CliArguments {
-  // pnpm 的不同调用层级可能保留参数分隔符，CLI 应忽略裸 `--`。
   const values = arguments_.filter((argument) => argument !== "--");
   const command = values.shift() ?? "help";
   const databaseIndex = values.indexOf("--db");
@@ -47,16 +46,19 @@ function jsonReplacer(_key: string, value: unknown): unknown {
   return typeof value === "bigint" ? value.toString() : value;
 }
 
-/** 输出简短帮助，示例与根脚本保持一致。 */
+/** 输出简短帮助。 */
 function printHelp(): void {
   console.log(`用法：
   pnpm graph:build
   pnpm graph:ask -- "item.effect.attack_bonus 最终进入哪个伤害乘区？"
   pnpm graph:trace -- rogue_5_relic_fight_11
   pnpm graph:export -- rogue_6
+  pnpm graph:export -- all
   pnpm graph:cypher -- "MATCH (n) RETURN label(n), count(*)"
 
-可在任一命令末尾添加 --db .data/custom.kuzu。`);
+藏品→公式簿程序在 src/lib/formula/relic-programs.ts（route + apply），不生成按藏品 ID 总表。
+export 同时写出 Kuzu graph 预测与纯 TS formula 贡献函数结果。
+ask/trace/cypher/build 可加 --db .data/custom.kuzu。`);
 }
 
 /** CLI 主入口。 */
@@ -68,18 +70,21 @@ async function main(): Promise<void> {
   }
   if (arguments_.command === "export") {
     await ensureDatabase(arguments_.databaseOverride);
-    console.log(
-      JSON.stringify(
-        // JSON 是生产导出的唯一格式，并复用 CLI 选择的 Kuzu 数据库。
-        await exportRelicZoneJson(
-          arguments_.text || "rogue_6",
-          undefined,
-          arguments_.databaseOverride,
-        ),
-        null,
-        2,
-      ),
+    const requested = arguments_.text || "rogue_6";
+    const topicIds = requested === "all" ? await listRelicZoneTopicIds() : [requested];
+    // 逐主题执行可避免 Windows Kuzu 原生驱动同时打开多个数据库句柄。
+    const results = [];
+    for (const topicId of topicIds) {
+      results.push(await exportRelicZoneJson(topicId, arguments_.databaseOverride));
+    }
+    console.log(JSON.stringify(results.length === 1 ? results[0] : results, null, 2));
+    return;
+  }
+  if (arguments_.command === "codegen" || arguments_.command === "codegen:relic-zones") {
+    console.error(
+      "已取消按藏品 ID 生成总表。请使用 @arkrog/arknights-knowledge-graph 的 routeRelicBuffToZones / applyRelicBuffsToFormulaContext。",
     );
+    process.exitCode = 1;
     return;
   }
 

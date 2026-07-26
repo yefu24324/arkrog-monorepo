@@ -159,4 +159,21 @@ export class FormulaContext {
     }
     return cloned;
   }
+
+  /**
+   * 切换已有贡献项的生效状态（用于敌人/前置藏品变化后的重判）。
+   * 找不到对应 ID 时抛错，避免静默失败。
+   */
+  setContributionActive(contributionId: string, zoneId: DamageZoneId, active: boolean): this {
+    const entries = this.contributions.get(zoneId);
+    if (!entries) {
+      throw new Error(`乘区 ${zoneId} 不存在，无法切换贡献项 ${contributionId}`);
+    }
+    const target = entries.find((entry) => entry.id === contributionId);
+    if (!target) {
+      throw new Error(`乘区 ${zoneId} 中不存在贡献项 ID：${contributionId}`);
+    }
+    target.active = active;
+    return this;
+  }
 }
