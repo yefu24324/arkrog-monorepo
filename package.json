@@ -3,6 +3,7 @@
   "private": true,
   "packageManager": "pnpm@11.2.2",
   "scripts": {
+    "front:dev": "pnpm --filter arkrog_frontend dev",
     "game:split-topic": "pnpm --filter @arkrog/docs split-topic",
     "graph:ask": "pnpm --filter @arkrog/arknights-knowledge-graph graph:ask",
     "graph:build": "pnpm --filter @arkrog/arknights-knowledge-graph graph:build",
@@ -12,6 +13,7 @@
     "graph:test": "pnpm --filter @arkrog/arknights-knowledge-graph test",
     "graph:trace": "pnpm --filter @arkrog/arknights-knowledge-graph graph:trace",
     "graph:typecheck": "pnpm --filter @arkrog/arknights-knowledge-graph typecheck",
+    "relics:export": "pnpm --filter @arkrog/arknights-knowledge-graph relics:export",
     "schema:bootstrap": "pnpm --filter @arkrog/arknights-schema data:bootstrap",
     "schema:generate": "pnpm schema:bootstrap",
     "schema:analyze": "pnpm --filter @arkrog/arknights-schema data:analyze",

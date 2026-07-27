@@ -51,6 +51,8 @@ export function contributionsFromClassifiedEffect(
     active?: boolean;
     /** 未生效原因，写入 reason 后缀便于 UI 展示。 */
     inactiveReasons?: readonly string[];
+    /** 用户填写的藏品层数，由具体模板程序解释。 */
+    layer?: number;
   } = {},
 ): FormulaContribution[] {
   const active = options.active ?? true;
@@ -58,7 +60,7 @@ export function contributionsFromClassifiedEffect(
     !active && options.inactiveReasons?.length
       ? `（未生效：${options.inactiveReasons.join("；")}）`
       : "";
-  const writes = runRelicFormulaProgram(effect);
+  const writes = runRelicFormulaProgram(effect, { layer: options.layer ?? 0 });
   return writes.map((write, writeIndex) => ({
     // writeIndex 允许同一模板将一个参数拆成多个同乘区贡献，同时保持 ID 稳定唯一。
     id: `${item.id}:${effect.effectId}:${write.ruleId}:${write.zoneId}:${writeIndex}`,

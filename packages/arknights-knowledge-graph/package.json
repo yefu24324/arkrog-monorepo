@@ -24,13 +24,15 @@
     "graph:build": "tsx src/tools/cli.ts build",
     "graph:export": "tsx src/tools/cli.ts export",
     "graph:export:all": "tsx src/tools/cli.ts export all",
+    "relics:export": "tsx src/tools/export-wrapped-relics.ts all",
     "graph:ask": "tsx src/tools/cli.ts ask",
     "graph:trace": "tsx src/tools/cli.ts trace",
     "graph:cypher": "tsx src/tools/cli.ts cypher"
   },
   "dependencies": {
     "@arkrog/arknights-schema": "workspace:*",
-    "kuzu": "^0.11.3"
+    "kuzu": "^0.11.3",
+    "tiny-pinyin": "^1.3.2"
   },
   "devDependencies": {
     "@types/node": "^20",

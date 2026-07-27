@@ -14,6 +14,7 @@
 /public/data/enemies
 /content/docs/formula-book.mdx
 /public/data/formula-book.json
+/public/data/wrapped-relics
 /generated
 
 # 由 scripts/generate-docs.ts 从 TypeScript/JSDoc 与 graph:export 组装
@@ -26,6 +27,7 @@
 /public/data/relic-zone-validation
 /public/data/operators
 /public/data/enemies
+/public/data/wrapped-relics
 
 # test & build
 /coverage

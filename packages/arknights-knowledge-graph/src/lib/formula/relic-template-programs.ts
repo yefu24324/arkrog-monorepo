@@ -23,9 +23,16 @@ export interface RelicFormulaWrite {
   damageTypes?: readonly FormulaDamageType[];
 }
 
+/** 单件藏品程序可用的用户态输入。 */
+export interface RelicFormulaProgramContext {
+  /** 用户填写的藏品层数；具体程序决定从 0 还是从 1 开始解释。 */
+  layer: number;
+}
+
 /** 精确战斗模板使用的独立处理函数。 */
 export type RelicTemplateProgram = (
   effect: RelicEffectForContribution,
+  context: RelicFormulaProgramContext,
 ) => readonly RelicFormulaWrite[];
 
 /** 单条图谱语义预测使用的通用处理函数。 */
@@ -49,6 +56,18 @@ function blackboardNumberByPattern(
 ): { key: string; value: number } | null {
   const entry = effect.blackboard.find((candidate) => pattern.test(candidate.key));
   return entry ? { key: entry.key, value: entry.value } : null;
+}
+
+/** 按黑板上限约束非负整数层数，非法输入按 0 层处理。 */
+function boundedLayer(
+  effect: RelicEffectForContribution,
+  context: RelicFormulaProgramContext,
+): number {
+  const normalized = Number.isFinite(context.layer)
+    ? Math.max(0, Math.trunc(context.layer))
+    : 0;
+  const maximum = blackboardNumber(effect, "max_stack_cnt");
+  return maximum === undefined ? normalized : Math.min(normalized, maximum);
 }
 
 /** 构造只做同名数值读取的语义规则程序。 */
@@ -125,12 +144,15 @@ function attackSpeedProgram(
 /** 先锋新典训：技能开启后给 buff 持有者增加攻击力。 */
 function applyRogue6PioneerSkillTemplate(
   effect: RelicEffectForContribution,
+  context: RelicFormulaProgramContext,
 ): readonly RelicFormulaWrite[] {
   const value = blackboardNumber(effect, "atk");
   if (value === undefined) return [];
+  const layer = boundedLayer(effect, context);
   return [{
     zoneId: "INNER_ATK",
-    value,
+    // 该模板每次开启技能增加一层，未开启技能时从 0 层开始。
+    value: value * layer,
     parameterKey: "atk",
     ruleId: "template:rogue_6_pioneer_skill",
     reason: "战斗模板 rogue_6_pioneer_skill 在技能开启时对 BUFF_OWNER 写入 ATK MULTIPLIER。",
@@ -140,12 +162,15 @@ function applyRogue6PioneerSkillTemplate(
 /** 术师新典训：造成伤害时只降低本次伤害目标的法术抗性。 */
 function applyRogue6CasterAttackTemplate(
   effect: RelicEffectForContribution,
+  context: RelicFormulaProgramContext,
 ): readonly RelicFormulaWrite[] {
   const value = blackboardNumber(effect, "magic_resistance");
   if (value === undefined) return [];
+  const layer = boundedLayer(effect, context);
   return [{
     zoneId: "RES_FLAT",
-    value: Math.abs(value),
+    // 该模板每次命中叠加一层法抗降低，未命中时从 0 层开始。
+    value: Math.abs(value) * layer,
     parameterKey: "magic_resistance",
     ruleId: "template:rogue_6_caster_attack",
     reason: "战斗模板 rogue_6_caster_attack 在造成伤害时对 MODIFIER_TARGET 写入 MAGIC_RESISTANCE ADDITION。",
@@ -155,6 +180,7 @@ function applyRogue6CasterAttackTemplate(
 /** 古堡的子嗣：部署满 interval 后给 buff 持有者直加防御和法抗点数。 */
 function applyTriggeredDefenseAndResistanceTemplate(
   effect: RelicEffectForContribution,
+  _context: RelicFormulaProgramContext,
 ): readonly RelicFormulaWrite[] {
   const writes: RelicFormulaWrite[] = [];
   const defense = blackboardNumber(effect, "def");
@@ -226,11 +252,12 @@ const RELIC_RULE_PROGRAMS: ReadonlyMap<string, RelicRuleProgram> = new Map([
  */
 export function runRelicFormulaProgram(
   effect: RelicEffectForContribution,
+  context: RelicFormulaProgramContext = { layer: 0 },
 ): readonly RelicFormulaWrite[] {
   const templateProgram = effect.mechanicName
     ? RELIC_TEMPLATE_PROGRAMS.get(effect.mechanicName)
     : undefined;
-  if (templateProgram) return templateProgram(effect);
+  if (templateProgram) return templateProgram(effect, context);
 
   const writes: RelicFormulaWrite[] = [];
   for (const prediction of effect.predictions) {

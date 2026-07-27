@@ -18,14 +18,13 @@
 ```ts
 import {
   FormulaContext,
-  applyRelicBuffsToFormulaContext,
+  applyRelicItemsToFormulaContext,
   evaluateDamageFormula,
 } from "@arkrog/arknights-knowledge-graph/formula";
 
 const context = new FormulaContext();
-applyRelicBuffsToFormulaContext(context, {
-  // CalcCenter 已经筛出的 userActive 藏品可整批直接传入。
-  relics: selectedRelics,
+applyRelicItemsToFormulaContext(context, selectedRelics, {
+  // selectedRelics 使用 relics:export 生成的 { id, name, relic, charBuffs, layer, enable }。
   topicId: rogueInput.topic,
   // 生效上下文：敌人类型 / 职业 / 关卡；前置藏品从 relics 自动解析。
   activation: {
@@ -46,7 +45,8 @@ evaluateDamageFormula("FINAL_ATK", context, { ATK0: 100 });
 - **模板程序** `runRelicFormulaProgram`：已注册战斗模板使用独立函数解释参数、目标和乘区；未注册模板才回退到明确的通用语义规则
 - **生效** `evaluateBuffActivation`：读黑板 `reliance_relics` / 敌人 ID、排除、等级与标签 / 职业、子职业与部署位 / 关卡选择器
 - **受赠者** 文档预览默认当前干员收到 `charBuffData`；职业新典训会从进阶券稳定 ID 额外校验职业
-- **批量** `applyRelicBuffsToFormulaContext`：一次处理 CalcCenter 的 `selectedRelics`，并从同一列表推导 `reliance_relics` 依赖集合
+- **批量** `applyRelicItemsToFormulaContext`：一次处理共享包装藏品；`enable=false` 完全跳过，启用列表自动形成 `reliance_relics` 依赖集合
+- **原始数据** `relic` 与 `charBuffs` 保留 GameData 原始对象，`layer` 从 0 开始并由具体藏品程序解释
 - **写入** 贡献可 `active=false`（保留记录与原因，公式簿求值自动跳过）
 
 实现：`src/lib/formula/activation.ts`、`relic-programs.ts`、`relic-contributions.ts`、`relic-template-programs.ts`。
@@ -61,6 +61,7 @@ pnpm graph:export rogue_6
 pnpm graph:export:all
 pnpm graph:test
 pnpm graph:typecheck
+pnpm relics:export
 ```
 
 `export` 按主题写出两份独立 JSON：
@@ -69,3 +70,5 @@ pnpm graph:typecheck
 - `docs/game/relic-zone-validation/formula/rogue_N.json`：使用公式贡献函数检查可写入乘区；所有 buff 假定生效，不执行公式数值求值。
 
 稀疏人工修正位于 `docs/game/relic-zone-validation/human/`。文档站最终显示按 `human > formula` 回退，human 不参与生产图谱或公式路由。
+
+`pnpm relics:export` 按主题生成 `docs/game/wrapped-relics/rogue_N.json`，并同步同字节文件到 docs 与 frontend 的 `public/data/wrapped-relics/`。

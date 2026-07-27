@@ -7,6 +7,10 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ChevronDown, Search, X } from 'lucide-react';
+import type {
+  WrappedRelicItem,
+  WrappedRelicTopicArtifact,
+} from '@arkrog/arknights-knowledge-graph/formula';
 import { CombatPreviewPanel } from '@/components/combat-preview-panel';
 import { cn } from '@/lib/cn';
 
@@ -265,16 +269,22 @@ function Field({
 /** 单行藏品：多选 + 主信息行 + 可选展开的 buffs 详情行。 */
 function RelicRow({
   item,
+  wrappedItem,
   expanded,
   selected,
   onToggleExpand,
   onToggleSelect,
+  onToggleEnable,
+  onLayerChange,
 }: {
   item: RelicZoneItem;
+  wrappedItem: WrappedRelicItem;
   expanded: boolean;
   selected: boolean;
   onToggleExpand: () => void;
   onToggleSelect: () => void;
+  onToggleEnable: () => void;
+  onLayerChange: (layer: number) => void;
 }) {
   return (
     <>
@@ -292,6 +302,28 @@ function RelicRow({
             onChange={onToggleSelect}
             aria-label={`选择藏品 ${item.name}`}
             className="size-4 accent-[var(--color-fd-primary)]"
+          />
+        </td>
+        <td className="px-3 py-3">
+          <input
+            type="checkbox"
+            checked={wrappedItem.enable}
+            disabled={!selected}
+            onChange={onToggleEnable}
+            aria-label={`启用藏品 ${item.name}`}
+            className="size-4 accent-[var(--color-fd-primary)] disabled:opacity-40"
+          />
+        </td>
+        <td className="px-3 py-3">
+          <input
+            type="number"
+            min={0}
+            step={1}
+            value={wrappedItem.layer}
+            disabled={!selected}
+            onChange={(event) => onLayerChange(Math.max(0, Math.trunc(Number(event.target.value) || 0)))}
+            aria-label={`${item.name} 生效层数`}
+            className="w-16 rounded-md border bg-fd-background px-2 py-1 font-mono text-xs disabled:opacity-40"
           />
         </td>
         <td className="px-3 py-3">
@@ -339,7 +371,7 @@ function RelicRow({
       </tr>
       {expanded ? (
         <tr className="border-b last:border-b-0 bg-fd-muted/15">
-          <td colSpan={5} className="px-4 py-4">
+          <td colSpan={7} className="px-4 py-4">
             <div className="mb-3 flex flex-wrap gap-3 text-xs text-fd-muted-foreground">
               <span>稀有度：{item.rarity}</span>
               <span>buff 数：{item.effectCount}</span>
@@ -360,6 +392,8 @@ function RelicRow({
 /** 藏品乘区高级表格。 */
 export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
   const [data, setData] = useState<RelicZoneTableData | null>(null);
+  /** 原始包装藏品是公式输入；乘区 JSON 只负责表格展示。 */
+  const [wrappedRelics, setWrappedRelics] = useState<WrappedRelicItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [selectedZoneIds, setSelectedZoneIds] = useState<string[]>([]);
@@ -371,21 +405,31 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
     let cancelled = false;
 
     // 按主题拉取静态 JSON；切换主题时取消上一次请求结果。
-    void fetch(`/data/relic-zones/${topicId}.json`)
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+    void Promise.all([
+      fetch(`/data/relic-zones/${topicId}.json`),
+      fetch(`/data/wrapped-relics/${topicId}.json`),
+    ])
+      .then(async ([zoneResponse, wrappedResponse]) => {
+        if (!zoneResponse.ok || !wrappedResponse.ok) {
+          throw new Error(`HTTP zones=${zoneResponse.status}, wrapped=${wrappedResponse.status}`);
         }
-        return (await response.json()) as RelicZoneTableData;
+        return Promise.all([
+          zoneResponse.json() as Promise<RelicZoneTableData>,
+          wrappedResponse.json() as Promise<WrappedRelicTopicArtifact>,
+        ]);
       })
-      .then((payload) => {
+      .then(([payload, wrappedPayload]) => {
         if (cancelled) return;
+        const wrappedIds = new Set(wrappedPayload.items.map((item) => item.id));
+        const missing = (payload.items ?? []).find((item) => !wrappedIds.has(item.id));
+        if (missing) throw new Error(`包装藏品缺少 ${missing.id}`);
         // 请求成功后再清理旧错误，避免 effect 内同步 setState 触发级联渲染。
         setLoadError(null);
         setData({
           topic: payload.topic,
           items: payload.items ?? [],
         });
+        setWrappedRelics(wrappedPayload.items ?? []);
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -407,6 +451,10 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
     () => new Set(selectedRelicIds),
     [selectedRelicIds],
   );
+  const wrappedRelicMap = useMemo(
+    () => new Map(wrappedRelics.map((item) => [item.id, item])),
+    [wrappedRelics],
+  );
 
   const zones = useMemo(
     () => (data ? collectZones(data.items) : []),
@@ -425,9 +473,8 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
 
   /** 当前多选藏品的完整对象，供战斗预览面板求值。 */
   const selectedRelics = useMemo(() => {
-    if (!data) return [];
-    return data.items.filter((item) => selectedRelicIdSet.has(item.id));
-  }, [data, selectedRelicIdSet]);
+    return wrappedRelics.filter((item) => selectedRelicIdSet.has(item.id));
+  }, [wrappedRelics, selectedRelicIdSet]);
 
   const allFilteredSelected =
     filtered.length > 0 && filtered.every((item) => selectedRelicIdSet.has(item.id));
@@ -456,6 +503,22 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
       prev.includes(itemId)
         ? prev.filter((id) => id !== itemId)
         : [...prev, itemId],
+    );
+  }
+
+  /** 切换已选藏品的独立启用状态。 */
+  function toggleRelicEnabled(itemId: string) {
+    setWrappedRelics((previous) =>
+      previous.map((item) =>
+        item.id === itemId ? { ...item, enable: !item.enable } : item,
+      ),
+    );
+  }
+
+  /** 更新用户层数；只替换包装外层，绝不修改原始 relic/charBuffs。 */
+  function updateRelicLayer(itemId: string, layer: number) {
+    setWrappedRelics((previous) =>
+      previous.map((item) => (item.id === itemId ? { ...item, layer } : item)),
     );
   }
 
@@ -503,7 +566,7 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
 
   return (
     <div className={cn('not-prose my-4 space-y-4', className)}>
-      <CombatPreviewPanel selectedRelics={selectedRelics} />
+      <CombatPreviewPanel topicId={topicId} selectedRelics={selectedRelics} />
 
       <div className="rounded-2xl border bg-fd-card p-4 text-fd-card-foreground shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -619,6 +682,8 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
                     className="size-4 accent-[var(--color-fd-primary)]"
                   />
                 </th>
+                <th className="w-14 px-3 py-2.5 font-medium">启用</th>
+                <th className="w-20 px-3 py-2.5 font-medium">层数</th>
                 <th className="w-10 px-3 py-2.5" aria-hidden />
                 <th className="w-[18%] px-3 py-2.5 font-medium">藏品名</th>
                 <th className="px-3 py-2.5 font-medium">原文描述</th>
@@ -626,20 +691,28 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((item) => (
-                <RelicRow
-                  key={item.id}
-                  item={item}
-                  expanded={expandedIdSet.has(item.id)}
-                  selected={selectedRelicIdSet.has(item.id)}
-                  onToggleExpand={() => toggleExpanded(item.id)}
-                  onToggleSelect={() => toggleRelicSelected(item.id)}
-                />
-              ))}
+              {filtered.map((item) => {
+                const wrappedItem = wrappedRelicMap.get(item.id);
+                // 加载阶段已验证完整性；这里保留空保护以避免异常 JSON 破坏整个页面。
+                if (!wrappedItem) return null;
+                return (
+                  <RelicRow
+                    key={item.id}
+                    item={item}
+                    wrappedItem={wrappedItem}
+                    expanded={expandedIdSet.has(item.id)}
+                    selected={selectedRelicIdSet.has(item.id)}
+                    onToggleExpand={() => toggleExpanded(item.id)}
+                    onToggleSelect={() => toggleRelicSelected(item.id)}
+                    onToggleEnable={() => toggleRelicEnabled(item.id)}
+                    onLayerChange={(layer) => updateRelicLayer(item.id, layer)}
+                  />
+                );
+              })}
               {filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={7}
                     className="px-4 py-10 text-center text-sm text-fd-muted-foreground"
                   >
                     没有匹配的藏品，试试调整搜索词或乘区筛选。

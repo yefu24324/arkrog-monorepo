@@ -12,7 +12,7 @@ import {
   evaluateDamageFormula,
   type DamageFormulaId,
   type FormulaActivationContext,
-  type RelicItemForContribution,
+  type WrappedRelicItem,
 } from '@arkrog/arknights-knowledge-graph/formula';
 import {
   FormulaResultPopover,
@@ -64,8 +64,10 @@ export interface EnemyDetail {
 }
 
 interface CombatPreviewPanelProps {
-  /** 当前多选的藏品（含 effects，用于贡献映射）。 */
-  selectedRelics: readonly RelicItemForContribution[];
+  /** 当前多选的原始包装藏品。 */
+  selectedRelics: readonly WrappedRelicItem[];
+  /** 当前主题 ID，用于构造原始 GameData 证据路径。 */
+  topicId: string;
   className?: string;
 }
 
@@ -97,12 +99,13 @@ function recordStringArray(
 
 /** 把当前选择转换为 graph 藏品生效判定上下文。 */
 function buildActivationContext(
-  selectedRelics: readonly RelicItemForContribution[],
+  selectedRelics: readonly WrappedRelicItem[],
   operator: OperatorDetail | null,
   enemy: EnemyDetail | null,
 ): FormulaActivationContext {
   return {
-    selectedRelicIds: selectedRelics.map((relic) => relic.id),
+    // 关闭的藏品不能满足 reliance_relics，和公式入口的过滤规则保持一致。
+    selectedRelicIds: selectedRelics.filter((relic) => relic.enable).map((relic) => relic.id),
     character: operator
       ? {
           profession: operator.profession,
@@ -299,6 +302,7 @@ function safeNamedExpr(
 /** 战斗属性预览双面板。 */
 export function CombatPreviewPanel({
   selectedRelics,
+  topicId,
   className,
 }: CombatPreviewPanelProps) {
   const [operatorIndex, setOperatorIndex] = useState<OperatorIndexEntry[]>([]);
@@ -405,6 +409,7 @@ export function CombatPreviewPanel({
     const context = new FormulaContext();
     // graph 程序统一完成乘区写入和生效判定，inactive 贡献保留来源但不参与求值。
     const contributions = applyRelicItemsToFormulaContext(context, selectedRelics, {
+      topicId,
       // 定向 charBuffData 默认赋给当前选择的干员，graph 仅继续校验职业等条件。
       activation: buildActivationContext(selectedRelics, operator, enemy),
     });
@@ -533,7 +538,7 @@ export function CombatPreviewPanel({
             : null,
       },
     };
-  }, [formulaBook, operator, enemy, selectedRelics]);
+  }, [formulaBook, operator, enemy, selectedRelics, topicId]);
 
   return (
     <div
@@ -550,7 +555,8 @@ export function CombatPreviewPanel({
           </p>
         </div>
         <p className="text-xs text-fd-muted-foreground">
-          已选 {selectedRelics.length} 件藏品
+          已选 {selectedRelics.length} 件藏品，其中{' '}
+          {selectedRelics.filter((relic) => relic.enable).length} 件启用
           {computed
             ? ` · ${computed.activeContributionCount}/${computed.contributionCount} 条贡献生效`
             : ''}

@@ -28,5 +28,8 @@ export * from "./relic-template-programs.js";
 /** 导出藏品路由与写入公式簿的组合程序。 */
 export * from "./relic-programs.js";
 
+/** 导出 docs 与 frontend 共用的原始藏品包装契约。 */
+export * from "./wrapped-relics.js";
+
 /** 导出 graph / formula 人工校验所需的函数乘区表构造器。 */
 export * from "./relic-zone-validation.js";

@@ -26,6 +26,7 @@ import {
   toContributionEffect,
   type RelicItemForContribution,
 } from "./relic-contributions.js";
+import type { WrappedRelicItem } from "./wrapped-relics.js";
 
 /** 单条 buff 路由结果：进哪些乘区。 */
 export interface RelicBuffZoneRoute {
@@ -43,13 +44,19 @@ export interface ApplyRelicProgramOptions {
   activation?: FormulaActivationContext;
   /** 由稳定进阶券 ID 推导、仅用于 charBuffData 的隐式职业限制。 */
   recipientProfession?: string;
+  /** 当前主题 ID，用于从原始包装藏品构造稳定 effectId 和 JSON Path。 */
+  topicId?: string;
+  /** 战斗模板索引；未提供时仍可使用黑板规则和已注册精确模板。 */
+  mechanicIndex?: MechanicIndex;
+  /** 用户填写的藏品层数，由具体藏品程序解释。 */
+  layer?: number;
 }
 
 /** 从“立即进阶职业”奖励券稳定 ID 推导装备受赠者职业。 */
-function inferRecipientProfession(item: RelicItemForContribution): string | undefined {
-  for (const effect of item.effects) {
-    if (effect.source !== "relics" || effect.key !== "immediate_reward") continue;
-    const rewardId = effect.blackboard.find((entry) => entry.key === "id")?.valueStr;
+function inferRecipientProfession(item: WrappedRelicItem): string | undefined {
+  for (const buff of item.relic.buffs) {
+    if (buff.key !== "immediate_reward") continue;
+    const rewardId = buff.blackboard.find((entry) => entry.key === "id")?.valueStr;
     const matched = rewardId?.match(/_upgrade_ticket_([a-z]+)_from_relic$/);
     if (matched?.[1]) return matched[1];
   }
@@ -138,6 +145,7 @@ export function applyClassifiedEffectToFormulaContext(
   const contributions = contributionsFromClassifiedEffect(item, contributionEffect, {
     active: activationResult.active,
     inactiveReasons: activationResult.inactiveReasons,
+    layer: options.layer,
   });
   for (const contribution of contributions) {
     context.addContribution(contribution);
@@ -186,25 +194,69 @@ export function applyRelicBuffsToFormulaContext(
 }
 
 /**
- * 批量：已带 predictions 的藏品列表 → 按生效上下文写入 FormulaContext。
+ * 批量：原始包装藏品列表 → 现场路由并按生效上下文写入 FormulaContext。
+ * `enable=false` 的藏品既不写入贡献，也不参与 reliance_relics 依赖集合。
  */
 export function applyRelicItemsToFormulaContext(
   context: FormulaContext,
-  items: readonly RelicItemForContribution[],
+  items: readonly WrappedRelicItem[],
   options: ApplyRelicProgramOptions = {},
 ): FormulaContribution[] {
+  const topicId = options.topicId ?? "unknown";
   const applied: FormulaContribution[] = [];
-  for (const item of items) {
+  const enabledItems = items.filter((item) => item.enable);
+  // 依赖集合只包含用户启用的藏品，关闭的前置藏品不能激活其他效果。
+  const activation: FormulaActivationContext = {
+    ...options.activation,
+    selectedRelicIds: enabledItems.map((item) => item.id),
+  };
+  for (const item of enabledItems) {
     // 同一件新典训的 charBuffData 共享直接奖励中编码的职业约束。
     const requiredProfession = inferRecipientProfession(item);
-    for (const effect of item.effects) {
+    item.relic.buffs.forEach((buff, buffIndex) => {
+      const routed = routeRelicBuffToZones({
+        effectId: `effect:${topicId}:${item.id}:${buffIndex}`,
+        source: "relics",
+        sourceKind: "relics",
+        buffIndex,
+        key: buff.key,
+        blackboard: buff.blackboard,
+        jsonPath: `$.details.${topicId}.relics[${JSON.stringify(item.id)}].buffs[${buffIndex}]`,
+        mechanicIndex: options.mechanicIndex,
+      });
       applied.push(
-        ...applyClassifiedEffectToFormulaContext(context, item, effect, {
+        ...applyClassifiedEffectToFormulaContext(context, item, routed.effect, {
           ...options,
-          // 文档预览默认当前干员就是受赠者，仅对职业新典训补充职业校验。
-          recipientProfession: isCharacterBuffEffect(effect) ? requiredProfession : undefined,
+          activation,
+          layer: item.layer,
+          recipientProfession: undefined,
         }),
       );
+    });
+    for (const characterBuff of item.charBuffs) {
+      (characterBuff.buffs ?? []).forEach((buff, buffIndex) => {
+        const routed = routeRelicBuffToZones({
+          effectId: `effect:${topicId}:charBuffData:${characterBuff.id}:${buffIndex}`,
+          source: `charBuffData:${characterBuff.id}`,
+          sourceKind: `charBuffData:${characterBuff.id}`,
+          buffIndex,
+          key: buff.key,
+          blackboard: buff.blackboard,
+          jsonPath: `$.details.${topicId}.charBuffData[${JSON.stringify(characterBuff.id)}].buffs[${buffIndex}]`,
+          mechanicIndex: options.mechanicIndex,
+        });
+        applied.push(
+          ...applyClassifiedEffectToFormulaContext(context, item, routed.effect, {
+            ...options,
+            activation,
+            layer: item.layer,
+            // 文档预览默认当前干员就是受赠者，仅对职业新典训补充职业校验。
+            recipientProfession: isCharacterBuffEffect(routed.effect)
+              ? requiredProfession
+              : undefined,
+          }),
+        );
+      });
     }
   }
   return applied;

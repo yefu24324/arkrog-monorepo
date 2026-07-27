@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "graph:build": "pnpm --filter @arkrog/arknights-knowledge-graph build",
-    "docs:generate": "pnpm graph:build && tsx scripts/generate-docs.ts",
+    "docs:generate": "pnpm --filter @arkrog/arknights-knowledge-graph relics:export && pnpm graph:build && tsx scripts/generate-docs.ts",
     "predev": "pnpm docs:generate",
     "dev": "next dev",
     "prebuild": "pnpm docs:generate && fumadocs-mdx",
