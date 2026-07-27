@@ -28,6 +28,15 @@ export * from "./relic-template-programs.js";
 /** 导出藏品路由与写入公式簿的组合程序。 */
 export * from "./relic-programs.js";
 
+/** 导出 Kuzu 同源的难度乘区路由与 FormulaContext 写入程序。 */
+export * from "./difficulty-programs.js";
+
+/** 导出与 GameData、Kuzu 事实分离的人工主题规则程序。 */
+export * from "./topic-rule-programs.js";
+
+/** 导出黑流树海低难度的独立人工规则函数。 */
+export * from "./topic-rules/rogue-6.js";
+
 /** 导出 docs 与 frontend 共用的原始藏品包装契约。 */
 export * from "./wrapped-relics.js";
 

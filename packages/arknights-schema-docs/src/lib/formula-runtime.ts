@@ -4,7 +4,7 @@
  */
 
 import type {
-  DamageFormulaDefinition,
+  FormulaDefinition,
   FormulaDamageType,
   FormulaZoneDefinition,
 } from '@arkrog/arknights-knowledge-graph/formula';
@@ -18,7 +18,7 @@ export interface FormulaZoneUsage {
 }
 
 /** graph 公式定义在静态 JSON 中附带的预渲染文本。 */
-export interface FormulaBookDefinition extends DamageFormulaDefinition {
+export interface FormulaBookDefinition extends FormulaDefinition {
   compactFormula: string;
   fullFormula: string;
   zones: FormulaZoneUsage[];

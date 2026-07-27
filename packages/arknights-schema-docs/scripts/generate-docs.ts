@@ -7,13 +7,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
+import type { ExportedOperatorIndexArtifact } from "@arkrog/arknights-schema/game-data";
 
 import {
-  DAMAGE_FORMULA_BOOK,
-  FORMULA_DAMAGE_ZONES,
+  FORMULA_BOOK,
+  FORMULA_ZONES,
   FormulaContext,
   explainDamageFormula,
-  renderDamageFormula,
+  renderFormula,
 } from "@arkrog/arknights-knowledge-graph/formula";
 
 /** 本脚本、源码包与生成目录的稳定路径。 */
@@ -45,15 +46,7 @@ const ENEMIES_DATA_ROOT = path.resolve(PACKAGE_ROOT, "public", "data", "enemies"
 const FORMULA_BOOK_CONTENT_PATH = path.resolve(CONTENT_ROOT, "formula-book.mdx");
 const FORMULA_BOOK_DATA_PATH = path.resolve(PACKAGE_ROOT, "public", "data", "formula-book.json");
 const GENERATED_ROOT = path.resolve(PACKAGE_ROOT, "generated");
-/** GameData 中的干员表与敌人表，用于战斗预览面板。 */
-const CHARACTER_TABLE_PATH = path.resolve(
-  REPO_ROOT,
-  "ArknightsGameData",
-  "zh_CN",
-  "gamedata",
-  "excel",
-  "character_table.json",
-);
+/** relics:export 生成的干员目录和 GameData 敌人表，用于战斗预览面板。 */
 const ENEMY_DATABASE_PATH = path.resolve(
   REPO_ROOT,
   "ArknightsGameData",
@@ -621,7 +614,7 @@ function readHumanRelicZoneArtifact(
   if (raw.schemaVersion !== 1 || raw.topic?.id !== topicId || !Array.isArray(raw.items)) {
     throw new Error(`${sourcePath} 不是有效的 human 藏品乘区文件。`);
   }
-  const knownZones = new Set(Object.keys(FORMULA_DAMAGE_ZONES));
+  const knownZones = new Set(Object.keys(FORMULA_ZONES));
   const itemIds = new Set<string>();
   for (const item of raw.items) {
     if (!item.id || !item.reviewer || itemIds.has(item.id)) {
@@ -720,8 +713,8 @@ ${cards}
   <Card title="藏品乘区人工校验" href="/docs/relic-zone-validation">
     对照 Kuzu 图谱、公式贡献函数与稀疏 human 人工修正
   </Card>
-  <Card title="伤害公式簿" href="/docs/formula-book">
-    浏览完整伤害公式、结构化乘区、节点说明与公式 AST
+  <Card title="战斗公式簿" href="/docs/formula-book">
+    浏览属性、资源、承伤和伤害公式，以及结构化乘区与公式 AST
   </Card>
 </Cards>
 `;
@@ -743,10 +736,10 @@ ${cards}
 /** 从实验公式源码生成浏览器可读取的数据和 Fumadocs 页面。 */
 function writeFormulaBookPage(): number {
   const emptyContext = new FormulaContext();
-  const formulas = Object.values(DAMAGE_FORMULA_BOOK).map((definition) => ({
+  const formulas = Object.values(FORMULA_BOOK).map((definition) => ({
     ...definition,
-    compactFormula: renderDamageFormula(definition.id, { expandFormulaReferences: false }),
-    fullFormula: renderDamageFormula(definition.id),
+    compactFormula: renderFormula(definition.id, { expandFormulaReferences: false }),
+    fullFormula: renderFormula(definition.id),
     zones: explainDamageFormula(definition.id, emptyContext).map((zone) => ({
       damageType: zone.damageType ?? null,
       name: zone.name,
@@ -758,18 +751,20 @@ function writeFormulaBookPage(): number {
     schemaVersion: 1,
     source: "packages/arknights-knowledge-graph/src/lib/formula",
     formulas,
-    zones: Object.values(FORMULA_DAMAGE_ZONES),
+    zones: Object.values(FORMULA_ZONES),
   };
   fs.mkdirSync(path.dirname(FORMULA_BOOK_DATA_PATH), { recursive: true });
   fs.writeFileSync(FORMULA_BOOK_DATA_PATH, `${JSON.stringify(data, null, 2)}\n`, "utf8");
   fs.writeFileSync(
     FORMULA_BOOK_CONTENT_PATH,
     `---
-title: 伤害公式簿
-description: 浏览结构化伤害公式、乘区聚合方式和节点说明
+title: 战斗公式簿
+description: 按我方与敌方浏览属性、伤害和其他战斗公式，以及乘区聚合方式
 ---
 
 公式数据直接由知识图谱包的 formula 模块生成，不在文档站维护第二份定义。
+
+页面按公式的主要输出对象分为我方与敌方，再分为属性加成、伤害加成和其他加成。公式中引用了另一方的属性不会改变其分类，例如我方物理伤害仍归入“我方 · 伤害加成”。
 
 <FormulaBookExplorer />
 `,
@@ -800,10 +795,10 @@ function writeRelicZonePages(topics: RelicZoneTopicSummary[]): number {
     path.resolve(RELIC_ZONES_CONTENT_ROOT, "index.mdx"),
     `---
 title: 藏品乘区
-description: 按肉鸽主题浏览藏品原文、加成乘区与 buffs 原数据
+description: 按肉鸽主题选择难度，并浏览藏品原文、加成乘区与 buffs 原数据
 ---
 
-由 \`pnpm graph:export\` 导出的 Kuzu graph 藏品乘区与生效条件表。
+由 \`pnpm graph:export\` 导出的 Kuzu graph 藏品乘区，与 Kuzu 同源难度规则共同驱动。难度表读取 \`relics:export\` 的原始主题数据；无法由客户端事实验证的难度机制明确保留为 unknown。
 
 <Cards>
 ${cards || '  <Card title="暂无数据">请先运行 graph:export</Card>'}
@@ -830,7 +825,7 @@ ${cards || '  <Card title="暂无数据">请先运行 graph:export</Card>'}
       path.resolve(RELIC_ZONES_CONTENT_ROOT, `${topic.id}.mdx`),
       `---
 title: ${JSON.stringify(topic.name)}
-description: ${JSON.stringify(`${topic.name}藏品乘区与生效条件表`)}
+description: ${JSON.stringify(`${topic.name}难度选择、藏品乘区与生效条件表`)}
 ---
 
 <RelicZoneExplorer topicId="${topic.id}" />
@@ -954,93 +949,17 @@ function unwrapDefinedData(value: unknown): unknown {
   return result;
 }
 
-/** 选择器用干员目录条目。 */
-interface OperatorIndexEntry {
-  id: string;
-  name: string;
-  profession: string;
-  rarity: string;
-}
-
-/** 干员精二满级详情（属性字段完整保留）。 */
-interface OperatorDetail {
-  id: string;
-  name: string;
-  profession: string;
-  rarity: string;
-  phase: number;
-  level: number;
-  /** graph 职业选择器使用的子职业 ID。 */
-  subProfessionId: string | null;
-  /** graph 部署位选择器使用的近战/远程位置。 */
-  position: string | null;
-  /** graph token 选择器使用的召唤物标记。 */
-  hasToken: boolean;
-  attributes: Record<string, unknown>;
-}
-
-/** 从 character_table 拆出索引与按 id 详情。 */
-function writeOperatorCatalog(): number {
-  if (!fs.existsSync(CHARACTER_TABLE_PATH)) {
-    console.warn(`未找到 character_table：${CHARACTER_TABLE_PATH}`);
-    return 0;
+/** 读取 relics:export 已生成的干员目录数量，不再覆盖完整干员文件。 */
+function countExportedOperators(): number {
+  const indexPath = path.resolve(OPERATORS_DATA_ROOT, "index.json");
+  if (!fs.existsSync(indexPath)) {
+    throw new Error(`未找到 relics:export 干员目录：${indexPath}`);
   }
-  fs.mkdirSync(OPERATORS_DATA_ROOT, { recursive: true });
-  const table = JSON.parse(fs.readFileSync(CHARACTER_TABLE_PATH, "utf8")) as Record<
-    string,
-    {
-      name?: string;
-      profession?: string;
-      rarity?: string;
-      isNotObtainable?: boolean;
-      subProfessionId?: string | null;
-      position?: string | null;
-      displayTokenDict?: Record<string, unknown> | null;
-      phases?: Array<{
-        attributesKeyFrames?: Array<{ level?: number; data?: Record<string, unknown> }>;
-      }>;
-    }
-  >;
-  const index: OperatorIndexEntry[] = [];
-  for (const [id, character] of Object.entries(table)) {
-    const profession = character.profession ?? "";
-    if (profession === "TOKEN" || profession === "TRAP") continue;
-    if (character.isNotObtainable) continue;
-    const phases = character.phases ?? [];
-    if (phases.length === 0) continue;
-    // 精二满级：取最高精英化阶段的最后一帧属性。
-    const phaseIndex = phases.length - 1;
-    const frames = phases[phaseIndex]?.attributesKeyFrames ?? [];
-    const frame = frames[frames.length - 1];
-    if (!frame?.data) continue;
-    const name = character.name ?? id;
-    const rarity = character.rarity ?? "";
-    index.push({ id, name, profession, rarity });
-    const detail: OperatorDetail = {
-      id,
-      name,
-      profession,
-      rarity,
-      phase: phaseIndex,
-      level: frame.level ?? 0,
-      subProfessionId: character.subProfessionId ?? null,
-      position: character.position ?? null,
-      hasToken: Boolean(character.displayTokenDict),
-      attributes: { ...frame.data },
-    };
-    fs.writeFileSync(
-      path.resolve(OPERATORS_DATA_ROOT, `${id}.json`),
-      `${JSON.stringify(detail, null, 2)}\n`,
-      "utf8",
-    );
+  const index = JSON.parse(fs.readFileSync(indexPath, "utf8")) as ExportedOperatorIndexArtifact;
+  if (index.schemaVersion !== 1 || index.count !== index.items.length) {
+    throw new Error(`relics:export 干员目录格式无效：${indexPath}`);
   }
-  index.sort((left, right) => left.name.localeCompare(right.name, "zh-CN"));
-  fs.writeFileSync(
-    path.resolve(OPERATORS_DATA_ROOT, "index.json"),
-    `${JSON.stringify({ schemaVersion: 1, count: index.length, items: index }, null, 2)}\n`,
-    "utf8",
-  );
-  return index.length;
+  return index.count;
 }
 
 /** 选择器用敌人目录条目。 */
@@ -1130,7 +1049,6 @@ function resetGeneratedContent(): void {
     RELIC_ZONES_DATA_ROOT,
     RELIC_VALIDATION_CONTENT_ROOT,
     RELIC_VALIDATION_DATA_ROOT,
-    OPERATORS_DATA_ROOT,
     ENEMIES_DATA_ROOT,
     FORMULA_BOOK_CONTENT_PATH,
     FORMULA_BOOK_DATA_PATH,
@@ -1152,14 +1070,14 @@ function main(): void {
   const relicPages = writeRelicZonePages(relicTopics);
   const validationPages = writeRelicZoneValidationPages(relicTopics);
   const formulaPages = writeFormulaBookPage();
-  const operatorCount = writeOperatorCatalog();
+  const operatorCount = countExportedOperators();
   const enemyCount = writeEnemyCatalog();
   const definitionCount = entries.reduce(
     (total, entry) => total + entry.definitions.length,
     0,
   );
   console.log(
-    `文档组装完成：${typePages} 个类型模块页面，覆盖 ${definitionCount} 个定义；伤害公式 ${formulaPages} 条；藏品乘区 ${relicPages} 个主题；人工校验 ${validationPages} 个主题；干员 ${operatorCount}、敌人 ${enemyCount}。`,
+    `文档组装完成：${typePages} 个类型模块页面，覆盖 ${definitionCount} 个定义；战斗公式 ${formulaPages} 条；藏品乘区 ${relicPages} 个主题；人工校验 ${validationPages} 个主题；干员 ${operatorCount}、敌人 ${enemyCount}。`,
   );
 }
 

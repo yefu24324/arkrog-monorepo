@@ -18,6 +18,8 @@ export interface FormulaActivationContext {
     levelType?: string | null;
     /** 敌人 tags。 */
     tags?: readonly string[] | null;
+    /** 当前敌人已知的运行时 buff，用于难度条件效果。 */
+    buffKeys?: readonly string[] | null;
   };
   /** 当前干员（职业类选择器用）。 */
   character?: {
@@ -36,7 +38,13 @@ export interface FormulaActivationContext {
     id?: string;
     /** 是否 Boss 关。 */
     isBoss?: boolean;
+    /** 是否紧急作战。 */
+    isEmergency?: boolean;
+    /** 是否险路恶敌。 */
+    isDanger?: boolean;
   };
+  /** 当前敌人登场后的经过秒数，用于限时难度效果。 */
+  elapsedSeconds?: number;
 }
 
 /** 单条生效判定结果。 */

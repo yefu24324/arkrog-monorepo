@@ -1,13 +1,13 @@
-import type { DamageZoneId } from "../domain/damage-zones.js";
+import type { FormulaZoneId } from "../domain/damage-zones.js";
 import type {
-  DamageFormulaId,
+  FormulaId,
   FormulaDamageType,
   FormulaExpression,
   OperationExpression,
 } from "./ast.js";
 import { FormulaContext, type EvaluatedFormulaZone } from "./context.js";
 import type { FormulaInputs } from "./evaluator.js";
-import { getDamageFormula } from "./formula-book.js";
+import { getFormula } from "./formula-book.js";
 import { getFormulaZone } from "./zones.js";
 
 /** 公式渲染模式。 */
@@ -23,6 +23,10 @@ export interface FormulaRenderOptions {
   inputs?: FormulaInputs;
   /** 默认递归展开子公式，关闭后只展示子公式短符号。 */
   expandFormulaReferences?: boolean;
+  /** 展开事件型技力公式时选择同一种触发事件。 */
+  triggerType?: string;
+  /** 通用承伤公式展开时使用的伤害类型。 */
+  damageType?: FormulaDamageType;
 }
 
 /** 一条公式使用的乘区及其当前来源说明。 */
@@ -49,10 +53,13 @@ function scopedSymbol(symbol: string, damageType?: FormulaDamageType): string {
 }
 
 /** 输出某个乘区的通用符号聚合式。 */
-function renderSymbolicZone(zoneId: DamageZoneId, damageType?: FormulaDamageType): string {
+function renderSymbolicZone(zoneId: FormulaZoneId, damageType?: FormulaDamageType): string {
   const zone = getFormulaZone(zoneId);
   const symbol = scopedSymbol(zone.symbol, damageType);
   if (zone.aggregation.kind === "product-one-plus") return `Πᵢ(1 + ${symbol}ᵢ)`;
+  if (zone.aggregation.kind === "product") return `Πᵢ${symbol}ᵢ`;
+  if (zone.aggregation.kind === "union") return `(1 - Πᵢ(1 - ${symbol}ᵢ))`;
+  if (zone.aggregation.kind === "max") return `max(${formatNumber(zone.aggregation.base)}, ${symbol}ᵢ)`;
   const { base, termScale } = zone.aggregation;
   if (base === 0 && termScale === 1) return `Σᵢ${symbol}ᵢ`;
   if (base === 1 && termScale === 1) return `(1 + Σᵢ${symbol}ᵢ)`;
@@ -68,15 +75,27 @@ function renderContribution(value: number, tooltip: string): string {
 
 /** 输出当前上下文中某个乘区的实际展开式。 */
 function renderExpandedZone(
-  zoneId: DamageZoneId,
+  zoneId: FormulaZoneId,
   damageType: FormulaDamageType | undefined,
   context: FormulaContext,
+  triggerType?: string,
 ): string {
   const zone = getFormulaZone(zoneId);
-  const entries = context.getContributions(zoneId, { damageType });
+  const entries = context.getContributions(zoneId, { damageType, triggerType });
   if (zone.aggregation.kind === "product-one-plus") {
     if (entries.length === 0) return "1";
     return `(${entries.map((entry) => `(1 + ${renderContribution(entry.value, entry.tooltip)})`).join(" × ")})`;
+  }
+  if (zone.aggregation.kind === "product") {
+    if (entries.length === 0) return "1";
+    return `(${entries.map((entry) => renderContribution(entry.value, entry.tooltip)).join(" × ")})`;
+  }
+  if (zone.aggregation.kind === "union") {
+    if (entries.length === 0) return "0";
+    return `(1 - ${entries.map((entry) => `(1 - ${renderContribution(entry.value, entry.tooltip)})`).join(" × ")})`;
+  }
+  if (zone.aggregation.kind === "max") {
+    return `max(${[formatNumber(zone.aggregation.base), ...entries.map((entry) => renderContribution(entry.value, entry.tooltip))].join(", ")})`;
   }
 
   const terms: string[] = [];
@@ -106,7 +125,7 @@ function renderOperation(node: OperationExpression, operands: string[]): string 
 function renderExpression(
   expression: FormulaExpression,
   options: Required<Pick<FormulaRenderOptions, "mode" | "expandFormulaReferences">> & FormulaRenderOptions,
-  formulaStack: readonly DamageFormulaId[],
+  formulaStack: readonly FormulaId[],
 ): string {
   switch (expression.kind) {
     case "constant":
@@ -119,10 +138,15 @@ function renderExpression(
     }
     case "zone":
       return options.mode === "expanded" && options.context
-        ? renderExpandedZone(expression.zoneId, expression.damageType, options.context)
-        : renderSymbolicZone(expression.zoneId, expression.damageType);
+        ? renderExpandedZone(
+            expression.zoneId,
+            expression.damageType ?? options.damageType,
+            options.context,
+            options.triggerType,
+          )
+        : renderSymbolicZone(expression.zoneId, expression.damageType ?? options.damageType);
     case "formula": {
-      const referenced = getDamageFormula(expression.formulaId);
+      const referenced = getFormula(expression.formulaId);
       if (!options.expandFormulaReferences) return referenced.symbol;
       if (formulaStack.includes(expression.formulaId)) {
         throw new Error(`公式存在循环引用：${[...formulaStack, expression.formulaId].join(" -> ")}`);
@@ -138,11 +162,11 @@ function renderExpression(
 }
 
 /** 输出带左值名称的完整公式预览。 */
-export function renderDamageFormula(
-  formulaId: DamageFormulaId,
+export function renderFormula(
+  formulaId: FormulaId,
   options: FormulaRenderOptions = {},
 ): string {
-  const definition = getDamageFormula(formulaId);
+  const definition = getFormula(formulaId);
   const normalizedOptions = {
     ...options,
     mode: options.mode ?? "symbolic",
@@ -151,11 +175,14 @@ export function renderDamageFormula(
   return `${definition.symbol} = ${renderExpression(definition.expression, normalizedOptions, [formulaId])}`;
 }
 
+/** @deprecated 公式簿已不限于伤害，请使用 renderFormula。 */
+export const renderDamageFormula = renderFormula;
+
 /** 递归收集公式实际引用到的乘区，并保留伤害类型筛选。 */
 function collectZoneReferences(
   expression: FormulaExpression,
-  target: Map<string, { zoneId: DamageZoneId; damageType?: FormulaDamageType }>,
-  formulaStack: readonly DamageFormulaId[],
+  target: Map<string, { zoneId: FormulaZoneId; damageType?: FormulaDamageType }>,
+  formulaStack: readonly FormulaId[],
 ): void {
   if (expression.kind === "zone") {
     target.set(`${expression.zoneId}:${expression.damageType ?? "all"}`, {
@@ -167,7 +194,7 @@ function collectZoneReferences(
   if (expression.kind === "formula") {
     if (formulaStack.includes(expression.formulaId)) return;
     collectZoneReferences(
-      getDamageFormula(expression.formulaId).expression,
+      getFormula(expression.formulaId).expression,
       target,
       [...formulaStack, expression.formulaId],
     );
@@ -179,12 +206,12 @@ function collectZoneReferences(
 }
 
 /** 返回一条公式使用的所有乘区、当前数值、tooltip、reason 和证据来源。 */
-export function explainDamageFormula(
-  formulaId: DamageFormulaId,
+export function explainFormula(
+  formulaId: FormulaId,
   context: FormulaContext,
 ): readonly FormulaZoneExplanation[] {
-  const references = new Map<string, { zoneId: DamageZoneId; damageType?: FormulaDamageType }>();
-  collectZoneReferences(getDamageFormula(formulaId).expression, references, [formulaId]);
+  const references = new Map<string, { zoneId: FormulaZoneId; damageType?: FormulaDamageType }>();
+  collectZoneReferences(getFormula(formulaId).expression, references, [formulaId]);
   return [...references.values()].map(({ zoneId, damageType }) => {
     const definition = getFormulaZone(zoneId);
     const evaluated = context.evaluateZone(zoneId, { damageType });
@@ -196,3 +223,6 @@ export function explainDamageFormula(
     };
   });
 }
+
+/** @deprecated 公式簿已不限于伤害，请使用 explainFormula。 */
+export const explainDamageFormula = explainFormula;

@@ -1,4 +1,4 @@
-import type { DamageZoneId } from "./damage-zones.js";
+import type { FormulaZoneId } from "./damage-zones.js";
 import type { EvidenceStatus } from "../types.js";
 
 
@@ -51,8 +51,9 @@ export type EngineRuleCondition =
   | { kind: "parameterKeyMatches"; pattern: string }
   | { kind: "parameterNumber"; key: string; operator: "lt" | "lte" | "gt" | "gte" | "eq"; value: number }
   | { kind: "mechanicContains"; values: string[] }
-  | { kind: "actionMatches"; componentType?: string; attributeType?: string; formulaItem?: string; target?: string }
-  | { kind: "actionNotMatches"; componentType?: string; attributeType?: string; formulaItem?: string; target?: string };
+  | { kind: "mechanicNotContains"; values: string[] }
+  | { kind: "actionMatches"; event?: string; componentType?: string; attributeType?: string; formulaItem?: string; target?: string }
+  | { kind: "actionNotMatches"; event?: string; componentType?: string; attributeType?: string; formulaItem?: string; target?: string };
 
 /** 可版本化的战斗引擎语义规则。 */
 export interface EngineSemanticRule {
@@ -65,7 +66,7 @@ export interface EngineSemanticRule {
   /** 规则说明。 */
   description: string;
   /** 预测目标乘区。 */
-  zoneId: DamageZoneId;
+  zoneId: FormulaZoneId;
   /** 证据等级。 */
   status: EvidenceStatus;
   /** 置信度。 */
@@ -83,7 +84,7 @@ export interface EnginePrediction {
   /** 命中的规则 ID。 */
   ruleId: string;
   /** 目标乘区。 */
-  zoneId: DamageZoneId;
+  zoneId: FormulaZoneId;
   /** 证据等级。 */
   status: EvidenceStatus;
   /** 置信度。 */
@@ -118,7 +119,11 @@ export const ENGINE_SEMANTIC_RULES: EngineSemanticRule[] = [
     zoneId: "INNER_ATK",
     status: "inferred",
     confidence: 0.85,
-    all: [{ kind: "hasParameter", keys: ["atk"] }],
+    all: [
+      { kind: "hasParameter", keys: ["atk"] },
+      // enemy_atk_down 修改敌人属性，不能按 global_buff 名称误入干员局内攻击区。
+      { kind: "mechanicNotContains", values: ["enemy_atk_down"] },
+    ],
     any: [
       { kind: "effectKeyContains", values: ["layer_", "ability", "global_buff"] },
     ],
@@ -161,6 +166,8 @@ export const ENGINE_SEMANTIC_RULES: EngineSemanticRule[] = [
       { kind: "hasParameter", keys: ["max_hp"] },
       // 排除 enemy_max_hp_down 等负向敌方生命修改。
       { kind: "parameterNumber", key: "max_hp", operator: "gte", value: 0 },
+      // enemy_max_hp_down 的正值是敌人绝对倍率，不是干员生命加成。
+      { kind: "mechanicNotContains", values: ["enemy_max_hp_down", "rogue_6_start_3"] },
     ],
     any: [
       { kind: "effectKeyContains", values: ["layer_", "ability", "global_buff"] },
@@ -206,6 +213,8 @@ export const ENGINE_SEMANTIC_RULES: EngineSemanticRule[] = [
       { kind: "parameterNumber", key: "def", operator: "gte", value: 0 },
       // Action 已明确声明点数直加时，不能再按 global_buff 名称猜成百分比倍率。
       { kind: "actionNotMatches", componentType: "CreateBuff", attributeType: "DEF", formulaItem: "ADDITION", target: "BUFF_OWNER" },
+      // enemy_def_down 的正值是敌人绝对倍率，不是干员防御加成。
+      { kind: "mechanicNotContains", values: ["enemy_def_down"] },
     ],
     any: [
       { kind: "effectKeyContains", values: ["layer_", "ability", "global_buff"] },
@@ -304,7 +313,7 @@ export const ENGINE_SEMANTIC_RULES: EngineSemanticRule[] = [
     status: "verified",
     confidence: 0.99,
     all: [
-      { kind: "parameterKeyMatches", pattern: "^(damage_scale|ep_damage_scale|damage_scale_factor)$" },
+      { kind: "parameterKeyMatches", pattern: "^(damage_scale|damage_scale_factor)$" },
       { kind: "actionMatches", componentType: "DamageScale" },
     ],
     fieldPaths: ["blackboard.damage_scale", "blackboard.ep_damage_scale"],
@@ -317,7 +326,7 @@ export const ENGINE_SEMANTIC_RULES: EngineSemanticRule[] = [
     zoneId: "DAMAGE_AMPLIFICATION",
     status: "inferred",
     confidence: 0.9,
-    all: [{ kind: "parameterKeyMatches", pattern: "^(damage_scale|ep_damage_scale|damage_scale_factor)$" }],
+    all: [{ kind: "parameterKeyMatches", pattern: "^(damage_scale|damage_scale_factor)$" }],
     any: [{ kind: "mechanicContains", values: ["damage_scale"] }],
   },
   {
@@ -353,6 +362,8 @@ export const ENGINE_SEMANTIC_RULES: EngineSemanticRule[] = [
     all: [
       { kind: "mechanicContains", values: ["enemy_def_down"] },
       { kind: "hasParameter", keys: ["def"] },
+      // 负值才是百分比减防；1.35 一类正值表示敌人属性倍率。
+      { kind: "parameterNumber", key: "def", operator: "lt", value: 0 },
     ],
   },
   {
@@ -380,6 +391,35 @@ export const ENGINE_SEMANTIC_RULES: EngineSemanticRule[] = [
     all: [
       { kind: "mechanicContains", values: ["enemy_max_hp_down"] },
       { kind: "hasParameter", keys: ["max_hp", "trig_type"] },
+    ],
+  },
+  {
+    id: "enemy-hp-legacy-support-action",
+    version: 1,
+    name: "遗留支援敌方生命降低",
+    description: "rogue_6_start_3 模板对敌方 buff 持有者写入 MAX_HP FINAL_SCALER，进入藏品敌方生命降低区。",
+    zoneId: "ENEMY_HP_RELIC",
+    status: "verified",
+    confidence: 1,
+    all: [
+      { kind: "effectKeyIn", values: ["global_buff_layer"] },
+      { kind: "mechanicContains", values: ["rogue_6_start_3"] },
+      { kind: "hasParameter", keys: ["max_hp"] },
+      { kind: "actionMatches", componentType: "CreateBuff", attributeType: "MAX_HP", formulaItem: "FINAL_SCALER", target: "BUFF_OWNER" },
+    ],
+  },
+  {
+    id: "enemy-hp-legacy-support-fallback",
+    version: 1,
+    name: "遗留支援敌方生命降低后备规则",
+    description: "浏览器不加载战斗模板时，由 global_buff_layer、rogue_6_start_3 和 max_hp 原始参数保守恢复同一乘区。",
+    zoneId: "ENEMY_HP_RELIC",
+    status: "inferred",
+    confidence: 0.95,
+    all: [
+      { kind: "effectKeyIn", values: ["global_buff_layer"] },
+      { kind: "mechanicContains", values: ["rogue_6_start_3"] },
+      { kind: "hasParameter", keys: ["max_hp"] },
     ],
   },
   {
@@ -420,6 +460,327 @@ export const ENGINE_SEMANTIC_RULES: EngineSemanticRule[] = [
       { kind: "parameterNumber", key: "def", operator: "lt", value: 0 },
       { kind: "actionMatches", componentType: "CreateBuff", attributeType: "DEF", formulaItem: "ADDITION", target: "MODIFIER_TARGET" },
     ],
+  },
+  {
+    id: "deploy-cost-addition",
+    version: 1,
+    name: "部署费用点数修改",
+    description: "char_attribute_add.cost 进入部署费用点数区。",
+    zoneId: "DEPLOY_COST_ADD",
+    status: "verified",
+    confidence: 1,
+    all: [
+      { kind: "effectKeyIn", values: ["char_attribute_add"] },
+      { kind: "hasParameter", keys: ["cost"] },
+    ],
+  },
+  {
+    id: "deploy-cost-multiplier",
+    version: 1,
+    name: "部署费用倍率修改",
+    description: "char_attribute_mul.cost 的倍率增量进入部署费用倍率区。",
+    zoneId: "DEPLOY_COST_MULTIPLIER",
+    status: "verified",
+    confidence: 1,
+    all: [
+      { kind: "effectKeyIn", values: ["char_attribute_mul"] },
+      { kind: "hasParameter", keys: ["cost"] },
+    ],
+  },
+  {
+    id: "initial-dp-addition",
+    version: 1,
+    name: "初始部署费用修改",
+    description: "level_init_cost_add.value 只修改战斗初始部署费用。",
+    zoneId: "INITIAL_DP_ADD",
+    status: "verified",
+    confidence: 1,
+    all: [
+      { kind: "effectKeyIn", values: ["level_init_cost_add"] },
+      { kind: "hasParameter", keys: ["value"] },
+    ],
+  },
+  {
+    id: "block-count-addition",
+    version: 1,
+    name: "阻挡数点数修改",
+    description: "属性加算或 Action BLOCK_CNT ADDITION 进入阻挡数点数区。",
+    zoneId: "BLOCK_COUNT_ADD",
+    status: "verified",
+    confidence: 1,
+    all: [{ kind: "hasParameter", keys: ["block_cnt"] }],
+    any: [
+      { kind: "effectKeyIn", values: ["char_attribute_add"] },
+      { kind: "actionMatches", attributeType: "BLOCK_CNT", formulaItem: "ADDITION" },
+      // 浏览器运行时不加载 26MB 模板表，常见全局/能力 buff 可由参数和载体共同后备识别。
+      { kind: "effectKeyContains", values: ["global_buff", "ability"] },
+    ],
+  },
+  {
+    id: "minimum-block-count",
+    version: 1,
+    name: "最低阻挡数约束",
+    description: "ensure_block 模板提供最低为 1 的独立约束。",
+    zoneId: "MIN_BLOCK_COUNT",
+    status: "inferred",
+    confidence: 0.95,
+    all: [{ kind: "mechanicContains", values: ["ensure_block"] }],
+  },
+  {
+    id: "initial-sp-addition",
+    version: 1,
+    name: "初始技力修改",
+    description: "modify_sp[born] 的 sp 只进入初始技力区。",
+    zoneId: "INITIAL_SP_ADD",
+    status: "verified",
+    confidence: 1,
+    all: [
+      { kind: "hasParameter", keys: ["sp"] },
+      { kind: "mechanicContains", values: ["modify_sp[born]"] },
+    ],
+  },
+  {
+    id: "triggered-sp-gain",
+    version: 1,
+    name: "事件触发技力回复",
+    description: "非出生事件提供的 sp 按触发类型写入单次回复区。",
+    zoneId: "SP_GAIN_PER_TRIGGER",
+    status: "inferred",
+    confidence: 0.9,
+    all: [
+      { kind: "hasParameter", keys: ["sp"] },
+      { kind: "mechanicNotContains", values: ["modify_sp[born]"] },
+    ],
+    any: [
+      { kind: "effectKeyContains", values: ["global_buff", "ability"] },
+      { kind: "mechanicContains", values: ["modify_sp", "add_sp"] },
+    ],
+  },
+  {
+    id: "sp-recovery-per-second-addition",
+    version: 1,
+    name: "每秒技力恢复修改",
+    description: "sp_recovery_per_sec 按每秒点数进入自然恢复区。",
+    zoneId: "SP_RECOVERY_PER_SECOND_ADD",
+    status: "verified",
+    confidence: 1,
+    all: [{ kind: "hasParameter", keys: ["sp_recovery_per_sec"] }],
+  },
+  {
+    id: "sp-cost-absolute-scale",
+    version: 1,
+    name: "技能技力消耗倍率",
+    description: "char_skill_cost_mul.scale 是最终消耗的绝对倍率。",
+    zoneId: "SP_COST_MULTIPLIER",
+    status: "verified",
+    confidence: 1,
+    all: [
+      { kind: "effectKeyIn", values: ["char_skill_cost_mul"] },
+      { kind: "hasParameter", keys: ["scale"] },
+    ],
+  },
+  {
+    id: "physical-evasion-probability",
+    version: 1,
+    name: "物理闪避概率",
+    description: "evade[physical] 和 evade[non_pure] 的 prob 进入物理闪避并集。",
+    zoneId: "PHYSICAL_EVASION",
+    status: "inferred",
+    confidence: 0.95,
+    all: [{ kind: "hasParameter", keys: ["prob"] }],
+    any: [{ kind: "mechanicContains", values: ["evade[physical]", "evade[non_pure]", "rogue_6_warrior_book_2"] }],
+  },
+  {
+    id: "magical-evasion-probability",
+    version: 1,
+    name: "法术闪避概率",
+    description: "evade[magical] 和 evade[non_pure] 的 prob 进入法术闪避并集。",
+    zoneId: "MAGICAL_EVASION",
+    status: "inferred",
+    confidence: 0.95,
+    all: [{ kind: "hasParameter", keys: ["prob"] }],
+    any: [{ kind: "mechanicContains", values: ["evade[magical]", "evade[non_pure]", "rogue_6_warrior_book_2"] }],
+  },
+  {
+    id: "physical-hitrate-final-scaler",
+    version: 1,
+    name: "物理命中率最终缩放",
+    description: "负的 damage_hitrate_physical FINAL_SCALER 转为物理闪避概率。",
+    zoneId: "PHYSICAL_EVASION",
+    status: "verified",
+    confidence: 1,
+    all: [
+      { kind: "parameterNumber", key: "damage_hitrate_physical", operator: "lte", value: 0 },
+      { kind: "actionMatches", attributeType: "DAMAGE_HITRATE_PHYSICAL", formulaItem: "FINAL_SCALER" },
+    ],
+  },
+  {
+    id: "magical-hitrate-final-scaler",
+    version: 1,
+    name: "法术命中率最终缩放",
+    description: "负的 damage_hitrate_magical FINAL_SCALER 转为法术闪避概率。",
+    zoneId: "MAGICAL_EVASION",
+    status: "verified",
+    confidence: 1,
+    all: [
+      { kind: "parameterNumber", key: "damage_hitrate_magical", operator: "lte", value: 0 },
+      { kind: "actionMatches", attributeType: "DAMAGE_HITRATE_MAGICAL", formulaItem: "FINAL_SCALER" },
+    ],
+  },
+  {
+    id: "enemy-atk-outer-multiplier",
+    version: 1,
+    name: "局外敌人攻击力倍率",
+    description: "enemy_atk_down 或 enemy_attribute_mul.atk 进入局外敌人攻击区。",
+    zoneId: "OUTER_ENEMY_ATK",
+    status: "inferred",
+    confidence: 0.95,
+    all: [{ kind: "hasParameter", keys: ["atk"] }],
+    any: [
+      { kind: "mechanicContains", values: ["enemy_atk_down"] },
+      { kind: "effectKeyIn", values: ["enemy_attribute_mul"] },
+    ],
+  },
+  {
+    id: "enemy-def-outer-multiplier",
+    version: 1,
+    name: "局外敌人防御力倍率",
+    description: "enemy_def_down 或 enemy_attribute_mul.def 进入局外敌人防御区。",
+    zoneId: "OUTER_ENEMY_DEF",
+    status: "inferred",
+    confidence: 0.95,
+    all: [
+      { kind: "parameterNumber", key: "def", operator: "gte", value: 1 },
+      { kind: "mechanicContains", values: ["enemy_def_down"] },
+    ],
+  },
+  {
+    id: "enemy-def-outer-attribute-multiplier",
+    version: 1,
+    name: "局外定向敌人防御力倍率",
+    description: "enemy_attribute_mul.def 的倍率增量进入局外敌人防御区。",
+    zoneId: "OUTER_ENEMY_DEF",
+    status: "verified",
+    confidence: 1,
+    all: [
+      { kind: "effectKeyIn", values: ["enemy_attribute_mul"] },
+      { kind: "hasParameter", keys: ["def"] },
+    ],
+  },
+  {
+    id: "enemy-res-static-addition",
+    version: 1,
+    name: "敌人法抗常驻点数修改",
+    description: "enemy_attribute_add.magic_resistance 进入敌人常驻法抗点数区。",
+    zoneId: "ENEMY_RES_ADD",
+    status: "verified",
+    confidence: 1,
+    all: [
+      { kind: "effectKeyIn", values: ["enemy_attribute_add"] },
+      { kind: "hasParameter", keys: ["magic_resistance"] },
+    ],
+  },
+  {
+    id: "char-damage-resistance-action",
+    version: 1,
+    name: "我方承伤减免",
+    description: "ON_TAKE_DAMAGE 的 one-minus DamageScale 进入我方承伤减免区。",
+    zoneId: "CHAR_DAMAGE_RESISTANCE",
+    status: "verified",
+    confidence: 1,
+    all: [
+      { kind: "hasParameter", keys: ["damage_resistance"] },
+      { kind: "actionMatches", event: "ON_TAKE_DAMAGE", componentType: "DamageScale" },
+    ],
+  },
+  {
+    id: "enemy-outgoing-damage-reduction-action",
+    version: 1,
+    name: "敌人造成伤害降低",
+    description: "ON_OUTPUT_DAMAGE 的 one-minus DamageScale 降低敌人最终输出伤害。",
+    zoneId: "ENEMY_OUTGOING_DAMAGE_REDUCTION",
+    status: "verified",
+    confidence: 1,
+    all: [
+      { kind: "hasParameter", keys: ["damage_resistance"] },
+      { kind: "actionMatches", event: "ON_OUTPUT_DAMAGE", componentType: "DamageScale" },
+    ],
+  },
+  {
+    id: "char-damage-resistance-mechanic-fallback",
+    version: 1,
+    name: "我方承伤减免模板后备",
+    description: "浏览器未加载 Action 索引时，由已知我方 damage_resistance 模板进入承伤减免区。",
+    zoneId: "CHAR_DAMAGE_RESISTANCE",
+    status: "inferred",
+    confidence: 0.95,
+    all: [
+      { kind: "hasParameter", keys: ["damage_resistance"] },
+      { kind: "mechanicNotContains", values: ["enemy_damage_resistance", "enemy_first_damage_down", "enemy_blocked_damage_scale"] },
+    ],
+    any: [
+      { kind: "mechanicContains", values: ["damage_resistance[", "damage_resistance_", "rogue_5_relic_fight_14"] },
+    ],
+  },
+  {
+    id: "enemy-outgoing-damage-reduction-fallback",
+    version: 1,
+    name: "敌人造成伤害降低模板后备",
+    description: "浏览器未加载 Action 索引时，由已知敌人输出模板进入伤害降低区。",
+    zoneId: "ENEMY_OUTGOING_DAMAGE_REDUCTION",
+    status: "inferred",
+    confidence: 0.98,
+    all: [{ kind: "hasParameter", keys: ["damage_resistance"] }],
+    any: [{ kind: "mechanicContains", values: ["enemy_first_damage_down", "enemy_blocked_damage_scale"] }],
+  },
+  {
+    id: "enemy-damage-resistance-outer-max",
+    version: 1,
+    name: "局外敌人受到伤害减免",
+    description: "enemy_damage_resistance 模板进入局外最大值区。",
+    zoneId: "OUTER_ENEMY_DAMAGE_RESISTANCE",
+    status: "verified",
+    confidence: 1,
+    all: [
+      { kind: "hasParameter", keys: ["damage_resistance"] },
+      { kind: "mechanicContains", values: ["enemy_damage_resistance"] },
+    ],
+  },
+  {
+    id: "char-elemental-impairment-resistance",
+    version: 1,
+    name: "我方元素损伤减免",
+    description: "EpDamageScale one-minus 使用 ep_damage_resistance 降低元素损伤累计。",
+    zoneId: "CHAR_EP_DAMAGE_RESISTANCE",
+    status: "verified",
+    confidence: 1,
+    all: [
+      { kind: "hasParameter", keys: ["ep_damage_resistance"] },
+      { kind: "actionMatches", componentType: "EpDamageScale" },
+    ],
+  },
+  {
+    id: "char-elemental-impairment-resistance-fallback",
+    version: 1,
+    name: "我方元素损伤减免模板后备",
+    description: "element_resistance 在浏览器无 Action 索引时仍进入元素损伤减免区。",
+    zoneId: "CHAR_EP_DAMAGE_RESISTANCE",
+    status: "inferred",
+    confidence: 0.98,
+    all: [
+      { kind: "hasParameter", keys: ["ep_damage_resistance"] },
+      { kind: "mechanicContains", values: ["element_resistance"] },
+    ],
+  },
+  {
+    id: "elemental-impairment-amplification",
+    version: 1,
+    name: "元素损伤放大",
+    description: "ep_damage_scale 是元素损伤累计的绝对倍率。",
+    zoneId: "ELEMENTAL_IMPAIRMENT_AMPLIFICATION",
+    status: "inferred",
+    confidence: 0.95,
+    all: [{ kind: "hasParameter", keys: ["ep_damage_scale"] }],
   },
 ];
 
@@ -484,6 +845,7 @@ function actionMatchesCondition(
   condition: Extract<EngineRuleCondition, { kind: "actionMatches" | "actionNotMatches" }>,
 ): boolean {
   return (
+    (!condition.event || action.event === condition.event) &&
     (!condition.componentType || action.componentType === condition.componentType) &&
     (!condition.attributeType || action.attributeType === condition.attributeType) &&
     (!condition.formulaItem || action.formulaItem === condition.formulaItem) &&
@@ -519,6 +881,8 @@ function conditionMatches(condition: EngineRuleCondition, facts: EngineEffectFac
     }
     case "mechanicContains":
       return condition.values.some((value) => mechanicName.includes(value.toLowerCase()));
+    case "mechanicNotContains":
+      return condition.values.every((value) => !mechanicName.includes(value.toLowerCase()));
     case "actionMatches":
       return facts.actions.some((action) => actionMatchesCondition(action, condition));
     case "actionNotMatches":
@@ -554,7 +918,7 @@ export function predictEngineZones(facts: EngineEffectFacts): EnginePrediction[]
     }));
 
   // 同一乘区可能同时命中验证规则和后备规则，只保留证据最强的一条。
-  const selected = new Map<DamageZoneId, EnginePrediction>();
+  const selected = new Map<FormulaZoneId, EnginePrediction>();
   for (const prediction of candidates) {
     const current = selected.get(prediction.zoneId);
     const score = (prediction.status === "verified" ? 2 : 1) + prediction.confidence;

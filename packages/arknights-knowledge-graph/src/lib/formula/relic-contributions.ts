@@ -69,6 +69,8 @@ export function contributionsFromClassifiedEffect(
     tooltip: item.name,
     reason: `${write.reason}${inactiveSuffix}`,
     damageTypes: write.damageTypes,
+    // 事件维度必须随贡献写入上下文，避免不同触发条件的技力回复被错误合并。
+    triggerTypes: write.triggerTypes,
     active,
     source: {
       kind: "relic",

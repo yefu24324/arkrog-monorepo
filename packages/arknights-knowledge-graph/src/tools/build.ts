@@ -3,15 +3,21 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
 import { RoguelikeTopicTableSchema } from "@arkrog/arknights-schema";
+import { collectDifficultyConditionalRelics } from "@arkrog/arknights-schema/game-data";
 import type { Connection, KuzuValue } from "kuzu";
 
 import { DAMAGE_ZONES } from "../lib/domain/damage-zones.js";
+import { ROGUE_DIFFICULTY_SEMANTIC_RULES } from "../lib/domain/difficulty-rules.js";
 import {
   ENGINE_SEMANTIC_RULES,
   extractMechanicActionFacts,
   predictEngineZones,
   type MechanicActionFact,
 } from "../lib/domain/engine-rules.js";
+import {
+  conditionalRelicMatchesDifficulty,
+  routeRogueDifficultyToZones,
+} from "../lib/formula/difficulty-programs.js";
 import { closeGraph, executeBatch, openGraph } from "./graph/database.js";
 import { createGraphSchema } from "./graph/schema.js";
 import { resolveRepositoryPaths, toRepositoryPath } from "./paths.js";
@@ -28,6 +34,10 @@ export interface BuildStatistics {
   schemas: number;
   /** 导入的游戏物品数量。 */
   items: number;
+  /** 导入的肉鸽难度数量。 */
+  difficulties: number;
+  /** 从难度原文结构化出的效果数量。 */
+  difficultyEffects: number;
   /** 导入的原始效果数量。 */
   effects: number;
   /** 导入的黑板参数数量。 */
@@ -40,6 +50,8 @@ export interface BuildStatistics {
   semanticRules: number;
   /** 自动得到乘区预测的效果数量。 */
   classifiedEffects: number;
+  /** 自动得到乘区预测的难度效果数量。 */
+  classifiedDifficultyEffects: number;
 }
 
 /** 内存中的规范化图数据；先收集再批量写入可显著降低原生调用次数。 */
@@ -47,6 +59,8 @@ interface GraphDataset {
   sources: Row[];
   schemas: Row[];
   items: Row[];
+  difficulties: Row[];
+  difficultyEffects: Row[];
   effects: Row[];
   parameters: Row[];
   fields: Row[];
@@ -56,17 +70,22 @@ interface GraphDataset {
   zones: Row[];
   sourceDeclaresSchema: Row[];
   sourceContainsItem: Row[];
+  sourceContainsDifficulty: Row[];
   sourceDefinesMechanic: Row[];
   schemaDescribesField: Row[];
   itemHasEffect: Row[];
+  difficultyHasEffect: Row[];
+  difficultyHasConditionalItem: Row[];
   effectHasParameter: Row[];
   effectUsesMechanic: Row[];
   mechanicHasAction: Row[];
   parameterMatchesField: Row[];
   ruleTargetsZone: Row[];
   effectPredictedBy: Row[];
+  difficultyEffectPredictedBy: Row[];
   fieldEntersZone: Row[];
   effectEntersZone: Row[];
+  difficultyEffectEntersZone: Row[];
 }
 
 /** 一个战斗模板在构建期使用的完整语义输入。 */
@@ -80,12 +99,16 @@ interface BattleMechanicFacts {
 /** 创建空数据集，所有数组名与 Kuzu 表保持一一对应。 */
 function createDataset(): GraphDataset {
   return {
-    sources: [], schemas: [], items: [], effects: [], parameters: [], fields: [],
+    sources: [], schemas: [], items: [], difficulties: [], difficultyEffects: [],
+    effects: [], parameters: [], fields: [],
     mechanics: [], actions: [], semanticRules: [], zones: [],
-    sourceDeclaresSchema: [], sourceContainsItem: [], sourceDefinesMechanic: [],
-    schemaDescribesField: [], itemHasEffect: [], effectHasParameter: [],
+    sourceDeclaresSchema: [], sourceContainsItem: [], sourceContainsDifficulty: [],
+    sourceDefinesMechanic: [],
+    schemaDescribesField: [], itemHasEffect: [], difficultyHasEffect: [],
+    difficultyHasConditionalItem: [], effectHasParameter: [],
     effectUsesMechanic: [], mechanicHasAction: [], parameterMatchesField: [],
-    ruleTargetsZone: [], effectPredictedBy: [], fieldEntersZone: [], effectEntersZone: [],
+    ruleTargetsZone: [], effectPredictedBy: [], difficultyEffectPredictedBy: [],
+    fieldEntersZone: [], effectEntersZone: [], difficultyEffectEntersZone: [],
   };
 }
 
@@ -294,6 +317,68 @@ async function collectRoguelikeKnowledge(
   const fieldIds = new Set(dataset.fields.map((field) => String(field.id)));
 
   for (const [topicId, detail] of Object.entries(data.details)) {
+    // 难度原始描述先通过与 formula 共用的版本化规则路由，再把事实与结论分别写入图谱。
+    detail.difficulties.forEach((difficulty, difficultyIndex) => {
+      const route = routeRogueDifficultyToZones({ topicId, difficulty, difficultyIndex });
+      const difficultyId = `difficulty:${topicId}:${difficulty.modeDifficulty}:${difficulty.grade}`;
+      dataset.difficulties.push({
+        id: difficultyId,
+        topic: topicId,
+        modeDifficulty: difficulty.modeDifficulty,
+        grade: BigInt(difficulty.grade),
+        name: difficulty.name,
+        ruleDesc: difficulty.ruleDesc,
+        classification: route.classification,
+        unclassifiedReason: route.unclassifiedReason ?? "",
+        jsonPath: route.jsonPath,
+      });
+      dataset.sourceContainsDifficulty.push({ from: sourceId, to: difficultyId });
+      route.effects.forEach((effect) => {
+        dataset.difficultyEffects.push({
+          id: effect.effectId,
+          matchedText: effect.matchedText,
+          // Kuzu 0.11 Windows 驱动会把整数 number 的位模式误当 DOUBLE；传十进制文本并在 Cypher 内转换。
+          numericText: String(effect.value),
+          target: effect.target,
+          damageTypes: effect.damageTypes?.join("|") ?? "",
+          evidenceKind: effect.evidenceKind,
+          jsonPath: effect.evidencePath,
+        });
+        dataset.difficultyHasEffect.push({ from: difficultyId, to: effect.effectId });
+        dataset.difficultyEffectPredictedBy.push({ from: effect.effectId, to: effect.rule.id });
+        dataset.difficultyEffectEntersZone.push({
+          from: effect.effectId,
+          to: effect.zoneId,
+          ruleId: effect.rule.id,
+          status: effect.rule.status,
+          confidence: effect.rule.confidence,
+          reason: effect.rule.description,
+          evidencePath: effect.evidencePath,
+        });
+      });
+    });
+
+    // 难度条件藏品与遗留支援形成 Difficulty -> Item 候选事实边，目标 buffs 继续走既有图谱分类。
+    for (const link of collectDifficultyConditionalRelics(topicId, detail)) {
+      const matchingDifficulties = detail.difficulties.filter((difficulty) =>
+        conditionalRelicMatchesDifficulty(link, difficulty),
+      );
+      if (link.kind === "MODE_GRADE_GRANT" && matchingDifficulties.length === 0) {
+        throw new Error(`难度条件藏品未命中原始难度：${topicId}/${link.id}`);
+      }
+      for (const difficulty of matchingDifficulties) {
+        dataset.difficultyHasConditionalItem.push({
+          from: `difficulty:${topicId}:${difficulty.modeDifficulty}:${difficulty.grade}`,
+          to: `item:${topicId}:${link.targetId}`,
+          kind: link.kind,
+          sourceItemId: link.sourceId,
+          choiceId: link.choiceId ?? "",
+          buffIndex: BigInt(link.buffIndex),
+          evidencePath: link.evidencePaths.join(" | "),
+        });
+      }
+    }
+
     const itemIds = new Set<string>();
     for (const [rawId, item] of Object.entries(detail.items)) {
       const id = `item:${topicId}:${rawId}`;
@@ -385,6 +470,19 @@ function collectDomainKnowledge(dataset: GraphDataset): void {
       });
     }
   }
+  // 难度规则进入同一 SemanticRule / DamageZone 模型，保证 Kuzu 与 formula 不维护第二份结论。
+  for (const rule of ROGUE_DIFFICULTY_SEMANTIC_RULES) {
+    dataset.semanticRules.push({
+      id: rule.id,
+      version: BigInt(rule.version),
+      name: rule.matchedText,
+      description: rule.description,
+      zoneId: rule.zoneId,
+      status: rule.status,
+      confidence: rule.confidence,
+    });
+    dataset.ruleTargetsZone.push({ from: rule.id, to: rule.zoneId });
+  }
 }
 
 /** 把规范化数据集按依赖顺序写入 Kuzu。 */
@@ -393,6 +491,8 @@ async function writeDataset(connection: Connection, dataset: GraphDataset): Prom
     [dataset.sources, "CREATE (n:Source {id: row.id, kind: row.kind, path: row.path, digest: row.digest})"],
     [dataset.schemas, "CREATE (n:SchemaDefinition {id: row.id, name: row.name, kind: row.kind, sourcePath: row.sourcePath})"],
     [dataset.items, "CREATE (n:Item {id: row.id, rawId: row.rawId, topic: row.topic, name: row.name, description: row.description, rarity: row.rarity, itemType: row.itemType, jsonPath: row.jsonPath})"],
+    [dataset.difficulties, "CREATE (n:RogueDifficulty {id: row.id, topic: row.topic, modeDifficulty: row.modeDifficulty, grade: row.grade, name: row.name, ruleDesc: row.ruleDesc, classification: row.classification, unclassifiedReason: row.unclassifiedReason, jsonPath: row.jsonPath})"],
+    [dataset.difficultyEffects, "CREATE (n:DifficultyEffect {id: row.id, matchedText: row.matchedText, numericValue: CAST(row.numericText AS DOUBLE), target: row.target, damageTypes: row.damageTypes, evidenceKind: row.evidenceKind, jsonPath: row.jsonPath})"],
     [dataset.effects, "CREATE (n:Effect {id: row.id, key: row.key, parameters: row.parameters, sourceKind: row.sourceKind, jsonPath: row.jsonPath})"],
     [dataset.parameters, "CREATE (n:Parameter {id: row.id, key: row.key, numericValue: row.numericValue, stringValue: row.stringValue, jsonPath: row.jsonPath})"],
     [dataset.fields, "CREATE (n:Field {id: row.id, path: row.path, description: row.description})"],
@@ -406,17 +506,22 @@ async function writeDataset(connection: Connection, dataset: GraphDataset): Prom
   const relations: Array<[Row[], string]> = [
     [dataset.sourceDeclaresSchema, "MATCH (a:Source {id: row.from}), (b:SchemaDefinition {id: row.to}) CREATE (a)-[:SOURCE_DECLARES_SCHEMA]->(b)"],
     [dataset.sourceContainsItem, "MATCH (a:Source {id: row.from}), (b:Item {id: row.to}) CREATE (a)-[:SOURCE_CONTAINS_ITEM]->(b)"],
+    [dataset.sourceContainsDifficulty, "MATCH (a:Source {id: row.from}), (b:RogueDifficulty {id: row.to}) CREATE (a)-[:SOURCE_CONTAINS_DIFFICULTY]->(b)"],
     [dataset.sourceDefinesMechanic, "MATCH (a:Source {id: row.from}), (b:Mechanic {id: row.to}) CREATE (a)-[:SOURCE_DEFINES_MECHANIC]->(b)"],
     [dataset.schemaDescribesField, "MATCH (a:SchemaDefinition {id: row.from}), (b:Field {id: row.to}) CREATE (a)-[:SCHEMA_DESCRIBES_FIELD]->(b)"],
     [dataset.itemHasEffect, "MATCH (a:Item {id: row.from}), (b:Effect {id: row.to}) CREATE (a)-[:ITEM_HAS_EFFECT]->(b)"],
+    [dataset.difficultyHasEffect, "MATCH (a:RogueDifficulty {id: row.from}), (b:DifficultyEffect {id: row.to}) CREATE (a)-[:DIFFICULTY_HAS_EFFECT]->(b)"],
+    [dataset.difficultyHasConditionalItem, "MATCH (a:RogueDifficulty {id: row.from}), (b:Item {id: row.to}) CREATE (a)-[:DIFFICULTY_HAS_CONDITIONAL_ITEM {kind: row.kind, sourceItemId: row.sourceItemId, choiceId: row.choiceId, buffIndex: row.buffIndex, evidencePath: row.evidencePath}]->(b)"],
     [dataset.effectHasParameter, "MATCH (a:Effect {id: row.from}), (b:Parameter {id: row.to}) CREATE (a)-[:EFFECT_HAS_PARAMETER]->(b)"],
     [dataset.effectUsesMechanic, "MATCH (a:Effect {id: row.from}), (b:Mechanic {id: row.to}) CREATE (a)-[:EFFECT_USES_MECHANIC]->(b)"],
     [dataset.mechanicHasAction, "MATCH (a:Mechanic {id: row.from}), (b:MechanicAction {id: row.to}) CREATE (a)-[:MECHANIC_HAS_ACTION]->(b)"],
     [dataset.parameterMatchesField, "MATCH (a:Parameter {id: row.from}), (b:Field {id: row.to}) CREATE (a)-[:PARAMETER_MATCHES_FIELD]->(b)"],
     [dataset.ruleTargetsZone, "MATCH (a:SemanticRule {id: row.from}), (b:DamageZone {id: row.to}) CREATE (a)-[:RULE_TARGETS_ZONE]->(b)"],
     [dataset.effectPredictedBy, "MATCH (a:Effect {id: row.from}), (b:SemanticRule {id: row.to}) CREATE (a)-[:EFFECT_PREDICTED_BY]->(b)"],
+    [dataset.difficultyEffectPredictedBy, "MATCH (a:DifficultyEffect {id: row.from}), (b:SemanticRule {id: row.to}) CREATE (a)-[:DIFFICULTY_EFFECT_PREDICTED_BY]->(b)"],
     [dataset.fieldEntersZone, "MATCH (a:Field {id: row.from}), (b:DamageZone {id: row.to}) CREATE (a)-[:FIELD_ENTERS_ZONE {ruleId: row.ruleId, status: row.status, confidence: row.confidence, reason: row.reason, evidencePath: row.evidencePath}]->(b)"],
     [dataset.effectEntersZone, "MATCH (a:Effect {id: row.from}), (b:DamageZone {id: row.to}) CREATE (a)-[:EFFECT_ENTERS_ZONE {ruleId: row.ruleId, status: row.status, confidence: row.confidence, reason: row.reason, evidencePath: row.evidencePath}]->(b)"],
+    [dataset.difficultyEffectEntersZone, "MATCH (a:DifficultyEffect {id: row.from}), (b:DamageZone {id: row.to}) CREATE (a)-[:DIFFICULTY_EFFECT_ENTERS_ZONE {ruleId: row.ruleId, status: row.status, confidence: row.confidence, reason: row.reason, evidencePath: row.evidencePath}]->(b)"],
   ];
   for (const [rows, statement] of relations) await executeBatch(connection, `UNWIND $rows AS row ${statement}`, rows);
 }
@@ -440,11 +545,16 @@ export async function buildKnowledgeGraph(databaseOverride?: string): Promise<Bu
     sources: dataset.sources.length,
     schemas: dataset.schemas.length,
     items: dataset.items.length,
+    difficulties: dataset.difficulties.length,
+    difficultyEffects: dataset.difficultyEffects.length,
     effects: dataset.effects.length,
     parameters: dataset.parameters.length,
     mechanics: dataset.mechanics.length,
     actions: dataset.actions.length,
     semanticRules: dataset.semanticRules.length,
     classifiedEffects: new Set(dataset.effectEntersZone.map((edge) => edge.from)).size,
+    classifiedDifficultyEffects: new Set(
+      dataset.difficultyEffectEntersZone.map((edge) => edge.from),
+    ).size,
   };
 }

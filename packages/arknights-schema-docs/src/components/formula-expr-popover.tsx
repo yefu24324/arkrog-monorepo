@@ -101,7 +101,61 @@ function buildZoneExpr(
       })),
     };
   }
+  if (zone.aggregation.kind === 'product') {
+    if (contributions.length === 0) return { kind: 'literal', value: 1, tooltip: `${name}（无倍率）` };
+    return {
+      kind: 'group',
+      operator: '×',
+      tooltip: name,
+      children: contributions.map((entry) => ({
+        kind: 'literal' as const,
+        value: entry.value,
+        tooltip: contributionTooltip(entry),
+      })),
+    };
+  }
+  if (zone.aggregation.kind === 'union') {
+    if (contributions.length === 0) return { kind: 'literal', value: 0, tooltip: `${name}（无概率）` };
+    return {
+      kind: 'group',
+      operator: '-',
+      tooltip: name,
+      children: [
+        { kind: 'literal', value: 1, tooltip: '完整概率' },
+        {
+          kind: 'group',
+          operator: '×',
+          tooltip: `${name}未命中部分`,
+          children: contributions.map((entry) => ({
+            kind: 'group' as const,
+            operator: '-' as const,
+            tooltip: contributionTooltip(entry),
+            children: [
+              { kind: 'literal' as const, value: 1, tooltip: '完整概率' },
+              { kind: 'literal' as const, value: entry.value, tooltip: contributionTooltip(entry) },
+            ],
+          })),
+        },
+      ],
+    };
+  }
+  if (zone.aggregation.kind === 'max') {
+    return {
+      kind: 'group',
+      operator: 'max',
+      tooltip: name,
+      children: [
+        { kind: 'literal', value: zone.aggregation.base, tooltip: `${name}基数` },
+        ...contributions.map((entry) => ({
+          kind: 'literal' as const,
+          value: entry.value,
+          tooltip: contributionTooltip(entry),
+        })),
+      ],
+    };
+  }
 
+  // 其余分支均为基数加缩放后的求和乘区。
   const children: FormulaExprNode[] = [];
   if (zone.aggregation.base !== 0 || contributions.length === 0) {
     children.push({

@@ -6,13 +6,21 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Search, X } from 'lucide-react';
+import type {
+  ExportedOperatorArtifact,
+  ExportedOperatorIndexArtifact,
+  ExportedOperatorIndexItem,
+  OriginalRogueDifficultyData,
+  OriginalGameDataObject,
+  WrappedRelicItem,
+} from '@arkrog/arknights-schema/game-data';
 import {
   FormulaContext,
+  applyRogueDifficultyToFormulaContext,
   applyRelicItemsToFormulaContext,
-  evaluateDamageFormula,
-  type DamageFormulaId,
+  evaluateFormula,
+  type FormulaId,
   type FormulaActivationContext,
-  type WrappedRelicItem,
 } from '@arkrog/arknights-knowledge-graph/formula';
 import {
   FormulaResultPopover,
@@ -24,16 +32,11 @@ import {
 import { cn } from '@/lib/cn';
 import { loadFormulaBook, type FormulaBookData } from '@/lib/formula-runtime';
 
-/** 干员目录条目。 */
-export interface OperatorIndexEntry {
-  id: string;
-  name: string;
-  profession: string;
-  rarity: string;
-}
+/** 干员选择器直接使用 relics:export 的轻量目录项。 */
+type OperatorIndexEntry = ExportedOperatorIndexItem;
 
-/** 干员精二满级详情。 */
-export interface OperatorDetail {
+/** 从完整导出文件派生的最高精英化阶段展示数据。 */
+interface OperatorDetail {
   id: string;
   name: string;
   profession: string;
@@ -43,7 +46,7 @@ export interface OperatorDetail {
   subProfessionId: string | null;
   position: string | null;
   hasToken: boolean;
-  attributes: Record<string, unknown>;
+  attributes: OriginalGameDataObject;
 }
 
 /** 敌人目录条目。 */
@@ -68,17 +71,46 @@ interface CombatPreviewPanelProps {
   selectedRelics: readonly WrappedRelicItem[];
   /** 当前主题 ID，用于构造原始 GameData 证据路径。 */
   topicId: string;
+  /** 当前主题全部主难度，用于累计较低 NORMAL 等级。 */
+  difficulties: readonly OriginalRogueDifficultyData[];
+  /** 用户在难度表中单选的原始难度。 */
+  selectedDifficulty: OriginalRogueDifficultyData | null;
   className?: string;
 }
 
 /** 从属性对象安全读取数值。 */
 function attrNumber(
-  attributes: Record<string, unknown> | undefined,
+  attributes: OriginalGameDataObject | undefined,
   key: string,
   fallback = 0,
 ): number {
   const value = attributes?.[key];
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+/** 从 relics:export 完整干员文件选择最高阶段最后一个属性关键帧。 */
+function buildOperatorDetail(artifact: ExportedOperatorArtifact): OperatorDetail {
+  if (artifact.schemaVersion !== 1 || artifact.id.length === 0) {
+    throw new Error('relics:export 干员文件格式无效');
+  }
+  const character = artifact.character;
+  const phases = character.phases ?? [];
+  const phase = phases[phases.length - 1];
+  const frames = phase?.attributesKeyFrames ?? [];
+  const frame = frames[frames.length - 1];
+  if (!frame?.data) throw new Error(`干员缺少最高阶段属性帧：${artifact.id}`);
+  return {
+    id: artifact.id,
+    name: character.name ?? artifact.id,
+    profession: character.profession ?? '',
+    rarity: character.rarity ?? '',
+    phase: phases.length - 1,
+    level: frame.level ?? 0,
+    subProfessionId: character.subProfessionId ?? null,
+    position: character.position ?? null,
+    hasToken: Boolean(character.displayTokenDict),
+    attributes: frame.data,
+  };
 }
 
 /** 从完整敌人数据安全读取字符串。 */
@@ -287,7 +319,7 @@ function AttrRow({
 
 /** 安全构建命名公式展示树。 */
 function safeNamedExpr(
-  formulaId: DamageFormulaId,
+  formulaId: FormulaId,
   book: FormulaBookData,
   context: FormulaContext,
   inputs: Record<string, number>,
@@ -303,6 +335,8 @@ function safeNamedExpr(
 export function CombatPreviewPanel({
   selectedRelics,
   topicId,
+  difficulties,
+  selectedDifficulty,
   className,
 }: CombatPreviewPanelProps) {
   const [operatorIndex, setOperatorIndex] = useState<OperatorIndexEntry[]>([]);
@@ -326,7 +360,7 @@ export function CombatPreviewPanel({
     void Promise.all([
       fetch('/data/operators/index.json').then(async (response) => {
         if (!response.ok) throw new Error(`operators index HTTP ${response.status}`);
-        return (await response.json()) as { items: OperatorIndexEntry[] };
+        return (await response.json()) as ExportedOperatorIndexArtifact;
       }),
       fetch('/data/enemies/index.json').then(async (response) => {
         if (!response.ok) throw new Error(`enemies index HTTP ${response.status}`);
@@ -351,7 +385,7 @@ export function CombatPreviewPanel({
     };
   }, []);
 
-  // 选中干员后拉取完整精二满级属性。
+  // 选中干员后拉取 relics:export 完整文件，并在展示层派生最高阶段属性。
   useEffect(() => {
     if (!operatorId) {
       setOperator(null);
@@ -362,7 +396,7 @@ export function CombatPreviewPanel({
     void fetch(`/data/operators/${operatorId}.json`)
       .then(async (response) => {
         if (!response.ok) throw new Error(`operator HTTP ${response.status}`);
-        return (await response.json()) as OperatorDetail;
+        return buildOperatorDetail((await response.json()) as ExportedOperatorArtifact);
       })
       .then((detail) => {
         if (!cancelled) setOperator(detail);
@@ -407,12 +441,21 @@ export function CombatPreviewPanel({
   const computed = useMemo(() => {
     if (!formulaBook) return null;
     const context = new FormulaContext();
+    const activation = buildActivationContext(selectedRelics, operator, enemy);
     // graph 程序统一完成乘区写入和生效判定，inactive 贡献保留来源但不参与求值。
-    const contributions = applyRelicItemsToFormulaContext(context, selectedRelics, {
+    const relicContributions = applyRelicItemsToFormulaContext(context, selectedRelics, {
       topicId,
       // 定向 charBuffData 默认赋给当前选择的干员，graph 仅继续校验职业等条件。
-      activation: buildActivationContext(selectedRelics, operator, enemy),
+      activation,
     });
+    // 难度与藏品写入同一个 FormulaContext；NORMAL 模式由 graph 程序累计此前等级。
+    const difficultyContributions = applyRogueDifficultyToFormulaContext(context, {
+      topicId,
+      difficulties,
+      selectedDifficulty,
+      activation,
+    });
+    const contributions = [...relicContributions, ...difficultyContributions];
 
     const atk0 = operator ? attrNumber(operator.attributes, 'atk') : null;
     const charHp0 = operator ? attrNumber(operator.attributes, 'maxHp') : null;
@@ -427,6 +470,9 @@ export function CombatPreviewPanel({
       ? attrNumber(operator.attributes, 'attackSpeed', 100)
       : null;
     const def0 = enemy ? attrNumber(enemy.attributes, 'def') : null;
+    const enemyAtk0 = enemy ? attrNumber(enemy.attributes, 'atk') : null;
+    const enemyAttackSpeed0 = enemy ? attrNumber(enemy.attributes, 'attackSpeed', 100) : null;
+    const enemyMoveSpeed0 = enemy ? attrNumber(enemy.attributes, 'moveSpeed') : null;
     const res0 = enemy ? attrNumber(enemy.attributes, 'magicResistance') : null;
     const hp0 = enemy ? attrNumber(enemy.attributes, 'maxHp') : null;
 
@@ -437,40 +483,58 @@ export function CombatPreviewPanel({
     let finalCharDef: number | null = null;
     let finalCharRes: number | null = null;
     let effectiveDef: number | null = null;
+    let finalEnemyAtk: number | null = null;
+    let finalEnemyAttackSpeed: number | null = null;
+    let finalEnemyMoveSpeed: number | null = null;
     let effectiveRes: number | null = null;
     let finalHp: number | null = null;
 
     try {
       if (atk0 !== null) {
-        finalAtk = evaluateDamageFormula('FINAL_ATK', context, { ATK0: atk0 });
+        finalAtk = evaluateFormula('FINAL_ATK', context, { ATK0: atk0 });
       }
       if (charHp0 !== null) {
-        finalCharHp = evaluateDamageFormula('FINAL_CHAR_HP', context, {
+        finalCharHp = evaluateFormula('FINAL_CHAR_HP', context, {
           CHAR_HP0: charHp0,
         });
       }
       if (charDef0 !== null) {
-        finalCharDef = evaluateDamageFormula('FINAL_CHAR_DEF', context, {
+        finalCharDef = evaluateFormula('FINAL_CHAR_DEF', context, {
           CHAR_DEF0: charDef0,
         });
       }
       if (charRes0 !== null) {
-        finalCharRes = evaluateDamageFormula('FINAL_CHAR_RES', context, {
+        finalCharRes = evaluateFormula('FINAL_CHAR_RES', context, {
           CHAR_RES0: charRes0,
         });
       }
       if (def0 !== null) {
-        effectiveDef = evaluateDamageFormula('EFFECTIVE_DEF', context, {
+        effectiveDef = evaluateFormula('EFFECTIVE_DEF', context, {
           DEF0: def0,
         });
       }
+      if (enemyAtk0 !== null) {
+        finalEnemyAtk = evaluateFormula('FINAL_ENEMY_ATK', context, {
+          ENEMY_ATK0: enemyAtk0,
+        });
+      }
+      if (enemyAttackSpeed0 !== null) {
+        finalEnemyAttackSpeed = evaluateFormula('FINAL_ENEMY_ATTACK_SPEED', context, {
+          ENEMY_ATTACK_SPEED0: enemyAttackSpeed0,
+        });
+      }
+      if (enemyMoveSpeed0 !== null) {
+        finalEnemyMoveSpeed = evaluateFormula('FINAL_ENEMY_MOVE_SPEED', context, {
+          ENEMY_MOVE_SPEED0: enemyMoveSpeed0,
+        });
+      }
       if (res0 !== null) {
-        effectiveRes = evaluateDamageFormula('EFFECTIVE_RES', context, {
+        effectiveRes = evaluateFormula('EFFECTIVE_RES', context, {
           RES0: res0,
         });
       }
       if (hp0 !== null) {
-        finalHp = evaluateDamageFormula('ENEMY_MAX_HP', context, { HP0: hp0 });
+        finalHp = evaluateFormula('ENEMY_MAX_HP', context, { HP0: hp0 });
       }
     } catch {
       // 缺少输入时保持 null。
@@ -489,6 +553,12 @@ export function CombatPreviewPanel({
       baseAttackSpeed,
       attackSpeedMultiplier: spdZone.value,
       def0,
+      enemyAtk0,
+      finalEnemyAtk,
+      enemyAttackSpeed0,
+      finalEnemyAttackSpeed,
+      enemyMoveSpeed0,
+      finalEnemyMoveSpeed,
       effectiveDef,
       res0,
       effectiveRes,
@@ -528,6 +598,24 @@ export function CombatPreviewPanel({
           def0 !== null
             ? safeNamedExpr('EFFECTIVE_DEF', formulaBook, context, { DEF0: def0 })
             : null,
+        enemyAtk:
+          enemyAtk0 !== null
+            ? safeNamedExpr('FINAL_ENEMY_ATK', formulaBook, context, {
+                ENEMY_ATK0: enemyAtk0,
+              })
+            : null,
+        enemyAttackSpeed:
+          enemyAttackSpeed0 !== null
+            ? safeNamedExpr('FINAL_ENEMY_ATTACK_SPEED', formulaBook, context, {
+                ENEMY_ATTACK_SPEED0: enemyAttackSpeed0,
+              })
+            : null,
+        enemyMoveSpeed:
+          enemyMoveSpeed0 !== null
+            ? safeNamedExpr('FINAL_ENEMY_MOVE_SPEED', formulaBook, context, {
+                ENEMY_MOVE_SPEED0: enemyMoveSpeed0,
+              })
+            : null,
         enemyRes:
           res0 !== null
             ? safeNamedExpr('EFFECTIVE_RES', formulaBook, context, { RES0: res0 })
@@ -538,7 +626,15 @@ export function CombatPreviewPanel({
             : null,
       },
     };
-  }, [formulaBook, operator, enemy, selectedRelics, topicId]);
+  }, [
+    difficulties,
+    enemy,
+    formulaBook,
+    operator,
+    selectedDifficulty,
+    selectedRelics,
+    topicId,
+  ]);
 
   return (
     <div
@@ -551,7 +647,7 @@ export function CombatPreviewPanel({
         <div>
           <h2 className="text-base font-semibold">战斗属性预览</h2>
           <p className="mt-0.5 text-sm text-fd-muted-foreground">
-            选择干员与敌人，多选藏品后重算属性；定向装备默认赋给当前干员
+            选择干员与敌人，按当前难度和启用藏品重算属性；定向装备默认赋给当前干员
           </p>
         </div>
         <p className="text-xs text-fd-muted-foreground">
@@ -683,6 +779,17 @@ export function CombatPreviewPanel({
                 level 0 · {enemy.prefabKey}
               </p>
               <AttrRow
+                label="攻击力 ATK"
+                base={formatNumber(computed?.enemyAtk0 ?? null, 0)}
+                computed={
+                  computed?.finalEnemyAtk != null
+                    ? formatNumber(computed.finalEnemyAtk)
+                    : null
+                }
+                hint="FINAL_ENEMY_ATK · 点击结果查看公式"
+                expression={computed?.expressions.enemyAtk}
+              />
+              <AttrRow
                 label="防御力 DEF"
                 base={formatNumber(computed?.def0 ?? null, 0)}
                 computed={
@@ -712,6 +819,28 @@ export function CombatPreviewPanel({
                 }
                 hint="ENEMY_MAX_HP · 点击结果查看公式"
                 expression={computed?.expressions.enemyHp}
+              />
+              <AttrRow
+                label="攻击速度"
+                base={formatNumber(computed?.enemyAttackSpeed0 ?? null, 0)}
+                computed={
+                  computed?.finalEnemyAttackSpeed != null
+                    ? formatNumber(computed.finalEnemyAttackSpeed)
+                    : null
+                }
+                hint="FINAL_ENEMY_ATTACK_SPEED · 点击结果查看公式"
+                expression={computed?.expressions.enemyAttackSpeed}
+              />
+              <AttrRow
+                label="移动速度"
+                base={formatNumber(computed?.enemyMoveSpeed0 ?? null, 2)}
+                computed={
+                  computed?.finalEnemyMoveSpeed != null
+                    ? formatNumber(computed.finalEnemyMoveSpeed, 2)
+                    : null
+                }
+                hint="FINAL_ENEMY_MOVE_SPEED · 点击结果查看公式"
+                expression={computed?.expressions.enemyMoveSpeed}
               />
             </div>
           ) : (

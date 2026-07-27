@@ -1,4 +1,4 @@
-import type { DamageZoneId } from "../domain/damage-zones.js";
+import type { FormulaZoneId } from "../domain/damage-zones.js";
 import type { FormulaDamageType } from "./ast.js";
 import { getFormulaZone } from "./zones.js";
 
@@ -8,6 +8,7 @@ export type FormulaContributionSourceKind =
   | "talent"
   | "skill"
   | "stage"
+  | "difficulty"
   | "manual"
   | "engine-rule";
 
@@ -27,6 +28,8 @@ export interface FormulaContributionSource {
   ruleId?: string;
   /** 规则使用的原始事实证据路径。 */
   evidencePath?: string;
+  /** 聚合多个难度等级时保留全部原始事实路径。 */
+  evidencePaths?: readonly string[];
 }
 
 /** 一个被放入指定乘区的原子加成。 */
@@ -34,7 +37,7 @@ export interface FormulaContribution {
   /** 上下文内稳定且唯一的贡献项 ID。 */
   id: string;
   /** 贡献项进入的稳定乘区 ID。 */
-  zoneId: DamageZoneId;
+  zoneId: FormulaZoneId;
   /** 已规范化到乘区约定方向的数值。 */
   value: number;
   /** 公式 UI 紧邻数值展示的短提示。 */
@@ -45,6 +48,8 @@ export interface FormulaContribution {
   source?: FormulaContributionSource;
   /** 未指定时表示对所有伤害类型生效。 */
   damageTypes?: readonly FormulaDamageType[];
+  /** 仅事件型资源贡献使用；未指定表示不受触发事件筛选。 */
+  triggerTypes?: readonly string[];
   /** 条件不成立时仍保留记录，但不参与当前求值。 */
   active: boolean;
 }
@@ -64,6 +69,8 @@ export type FormulaContributionOptions = Omit<
 export interface FormulaContributionFilter {
   /** 只选择适用于此伤害类型的贡献项。 */
   damageType?: FormulaDamageType;
+  /** 只选择适用于该战斗触发事件的资源贡献项。 */
+  triggerType?: string;
   /** 是否同时返回因条件不成立而停用的贡献项。 */
   includeInactive?: boolean;
 }
@@ -71,7 +78,7 @@ export interface FormulaContributionFilter {
 /** 乘区求值与解释所需的结构化快照。 */
 export interface EvaluatedFormulaZone {
   /** 稳定乘区 ID。 */
-  zoneId: DamageZoneId;
+  zoneId: FormulaZoneId;
   /** 乘区当前聚合结果。 */
   value: number;
   /** 实际参与求值的贡献项。 */
@@ -84,14 +91,14 @@ export interface EvaluatedFormulaZone {
  */
 export class FormulaContext {
   /** 按乘区保存原子贡献项，避免公式结构和藏品来源互相耦合。 */
-  private readonly contributions = new Map<DamageZoneId, FormulaContribution[]>();
+  private readonly contributions = new Map<FormulaZoneId, FormulaContribution[]>();
 
   /** 仅用于生成未显式指定 ID 的上下文本地贡献项。 */
   private nextLocalId = 1;
 
   /** 添加一条带 tooltip 和证据来源的加成。 */
   add(
-    zoneId: DamageZoneId,
+    zoneId: FormulaZoneId,
     value: number,
     tooltip: string,
     options: FormulaContributionOptions = {},
@@ -116,7 +123,15 @@ export class FormulaContext {
     entries.push({
       ...contribution,
       damageTypes: contribution.damageTypes ? [...contribution.damageTypes] : undefined,
-      source: contribution.source ? { ...contribution.source } : undefined,
+      triggerTypes: contribution.triggerTypes ? [...contribution.triggerTypes] : undefined,
+      source: contribution.source
+        ? {
+            ...contribution.source,
+            evidencePaths: contribution.source.evidencePaths
+              ? [...contribution.source.evidencePaths]
+              : undefined,
+          }
+        : undefined,
     });
     this.contributions.set(contribution.zoneId, entries);
     return this;
@@ -124,7 +139,7 @@ export class FormulaContext {
 
   /** 返回指定乘区中符合伤害类型和激活状态的贡献项副本。 */
   getContributions(
-    zoneId: DamageZoneId,
+    zoneId: FormulaZoneId,
     filter: FormulaContributionFilter = {},
   ): readonly FormulaContribution[] {
     return (this.contributions.get(zoneId) ?? [])
@@ -132,21 +147,49 @@ export class FormulaContext {
       .filter((entry) =>
         !filter.damageType || !entry.damageTypes || entry.damageTypes.includes(filter.damageType),
       )
+      .filter((entry) =>
+        !filter.triggerType || !entry.triggerTypes || entry.triggerTypes.includes(filter.triggerType),
+      )
       .map((entry) => ({
         ...entry,
         damageTypes: entry.damageTypes ? [...entry.damageTypes] : undefined,
-        source: entry.source ? { ...entry.source } : undefined,
+        triggerTypes: entry.triggerTypes ? [...entry.triggerTypes] : undefined,
+        source: entry.source
+          ? {
+              ...entry.source,
+              evidencePaths: entry.source.evidencePaths
+                ? [...entry.source.evidencePaths]
+                : undefined,
+            }
+          : undefined,
       }));
   }
 
   /** 按实验乘区定义聚合当前贡献项。 */
-  evaluateZone(zoneId: DamageZoneId, filter: FormulaContributionFilter = {}): EvaluatedFormulaZone {
+  evaluateZone(zoneId: FormulaZoneId, filter: FormulaContributionFilter = {}): EvaluatedFormulaZone {
     const zone = getFormulaZone(zoneId);
     const contributions = this.getContributions(zoneId, filter);
     const values = contributions.map((entry) => entry.value);
-    const value = zone.aggregation.kind === "sum"
-      ? zone.aggregation.base + zone.aggregation.termScale * values.reduce((sum, entry) => sum + entry, 0)
-      : values.reduce((product, entry) => product * (1 + entry), 1);
+    // 每一种聚合均对应战斗引擎中的一种稳定区内规则，禁止调用方自行二次解释贡献值。
+    let value: number;
+    switch (zone.aggregation.kind) {
+      case "sum":
+        value = zone.aggregation.base
+          + zone.aggregation.termScale * values.reduce((total, entry) => total + entry, 0);
+        break;
+      case "product-one-plus":
+        value = values.reduce((product, entry) => product * (1 + entry), 1);
+        break;
+      case "product":
+        value = values.reduce((product, entry) => product * entry, 1);
+        break;
+      case "union":
+        value = 1 - values.reduce((remaining, entry) => remaining * (1 - entry), 1);
+        break;
+      case "max":
+        value = values.reduce((maximum, entry) => Math.max(maximum, entry), zone.aggregation.base);
+        break;
+    }
     return { zoneId, value, contributions };
   }
 
@@ -164,7 +207,7 @@ export class FormulaContext {
    * 切换已有贡献项的生效状态（用于敌人/前置藏品变化后的重判）。
    * 找不到对应 ID 时抛错，避免静默失败。
    */
-  setContributionActive(contributionId: string, zoneId: DamageZoneId, active: boolean): this {
+  setContributionActive(contributionId: string, zoneId: FormulaZoneId, active: boolean): this {
     const entries = this.contributions.get(zoneId);
     if (!entries) {
       throw new Error(`乘区 ${zoneId} 不存在，无法切换贡献项 ${contributionId}`);

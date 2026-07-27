@@ -11,7 +11,7 @@ import {
   type MechanicIndex,
 } from "../classify/index.js";
 import type { BlackboardValue, ExportedRelicEffect, ExportedZonePrediction } from "../classify/types.js";
-import type { DamageZoneId } from "../domain/damage-zones.js";
+import type { FormulaZoneId } from "../domain/damage-zones.js";
 import {
   evaluateBuffActivation,
   type FormulaActivationContext,
@@ -33,7 +33,7 @@ export interface RelicBuffZoneRoute {
   /** classify 后的完整效果。 */
   effect: ExportedRelicEffect;
   /** 仅乘区 ID 列表（去重）。 */
-  zoneIds: DamageZoneId[];
+  zoneIds: FormulaZoneId[];
   /** 原始预测行。 */
   predictions: ExportedZonePrediction[];
 }
@@ -106,7 +106,7 @@ export function routeRelicBuffToZones(
     ...input,
     mechanicIndex: input.mechanicIndex ?? new Map(),
   });
-  const zoneIds = [...new Set(effect.predictions.map((prediction) => prediction.id as DamageZoneId))];
+  const zoneIds = [...new Set(effect.predictions.map((prediction) => prediction.id as FormulaZoneId))];
   return {
     effect,
     zoneIds,
@@ -271,7 +271,7 @@ export function reapplyActivationOnFormulaContext(
   context: FormulaContext,
   input: {
     /** 乘区列表；省略则遍历公式簿全部乘区定义过于宽泛，这里要求显式传入已写入的 zone。 */
-    zoneIds: readonly DamageZoneId[];
+    zoneIds: readonly FormulaZoneId[];
     /** 贡献 ID → 用于重判的 effectKey + blackboard。 */
     resolveEffect: (contribution: FormulaContribution) => {
       effectKey: string;

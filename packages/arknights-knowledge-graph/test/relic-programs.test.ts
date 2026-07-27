@@ -426,6 +426,140 @@ describe("applyRelicItemsToFormulaContext + 原始包装藏品", () => {
 });
 
 describe("藏品战斗模板公式程序分派", () => {
+  it("将费用、阻挡、技力、闪避和敌人局外减伤路由到独立乘区", () => {
+    const cases = [
+      {
+        key: "char_attribute_add",
+        blackboard: [
+          { key: "cost", value: -3, valueStr: null },
+          { key: "block_cnt", value: 1, valueStr: null },
+        ],
+        expected: ["DEPLOY_COST_ADD", "BLOCK_COUNT_ADD"],
+      },
+      {
+        key: "global_buff_stack",
+        blackboard: [
+          { key: "key", value: 0, valueStr: "modify_sp[born]" },
+          { key: "sp", value: 12, valueStr: null },
+        ],
+        expected: ["INITIAL_SP_ADD"],
+      },
+      {
+        key: "global_buff_normal",
+        blackboard: [
+          { key: "key", value: 0, valueStr: "modify_sp_recover[normal]" },
+          { key: "sp_recovery_per_sec", value: 0.35, valueStr: null },
+        ],
+        expected: ["SP_RECOVERY_PER_SECOND_ADD"],
+      },
+      {
+        key: "char_skill_cost_mul",
+        blackboard: [{ key: "scale", value: 0.65, valueStr: null }],
+        expected: ["SP_COST_MULTIPLIER"],
+      },
+      {
+        key: "global_buff_normal",
+        blackboard: [
+          { key: "key", value: 0, valueStr: "evade[non_pure]" },
+          { key: "prob", value: 0.1, valueStr: null },
+        ],
+        expected: ["PHYSICAL_EVASION", "MAGICAL_EVASION"],
+      },
+      {
+        key: "global_buff_normal",
+        blackboard: [
+          { key: "key", value: 0, valueStr: "enemy_damage_resistance[inf]" },
+          { key: "damage_resistance", value: 0.2, valueStr: null },
+        ],
+        expected: ["OUTER_ENEMY_DAMAGE_RESISTANCE"],
+      },
+      {
+        key: "global_buff_normal",
+        blackboard: [
+          { key: "key", value: 0, valueStr: "damage_resistance[filter_tag]" },
+          { key: "damage_resistance", value: 0.5, valueStr: null },
+        ],
+        expected: ["CHAR_DAMAGE_RESISTANCE"],
+      },
+      {
+        key: "global_buff_normal",
+        blackboard: [
+          { key: "key", value: 0, valueStr: "rogue_6_enemy_blocked_damage_scale" },
+          { key: "damage_resistance", value: 0.3, valueStr: null },
+        ],
+        expected: ["ENEMY_OUTGOING_DAMAGE_REDUCTION"],
+      },
+      {
+        key: "global_buff_normal",
+        blackboard: [
+          { key: "key", value: 0, valueStr: "element_resistance" },
+          { key: "ep_damage_resistance", value: 0.3, valueStr: null },
+        ],
+        expected: ["CHAR_EP_DAMAGE_RESISTANCE"],
+      },
+    ] as const;
+
+    cases.forEach((fixture, index) => {
+      const context = new FormulaContext();
+      const routed = routeRelicBuffToZones({
+        effectId: `new-zone-${index}`,
+        source: "relics",
+        buffIndex: index,
+        key: fixture.key,
+        blackboard: [...fixture.blackboard],
+        jsonPath: `$.new-zone[${index}]`,
+      });
+      applyClassifiedEffectToFormulaContext(
+        context,
+        { id: `new-zone-relic-${index}`, name: "新增公式藏品" },
+        routed.effect,
+      );
+      expect(routed.zoneIds).toEqual(expect.arrayContaining([...fixture.expected]));
+      expect(fixture.expected.every((zoneId) => context.getContributions(zoneId).length > 0)).toBe(true);
+    });
+  });
+
+  it("区分敌人绝对属性倍率与战斗内减防", () => {
+    const enemyDefense = routeRelicBuffToZones({
+      effectId: "enemy-def-absolute",
+      source: "relics",
+      buffIndex: 0,
+      key: "global_buff_normal",
+      blackboard: [
+        { key: "key", value: 0, valueStr: "enemy_def_down" },
+        { key: "def", value: 1.35, valueStr: null },
+      ],
+      jsonPath: "$.enemy-def-absolute",
+    });
+    const enemyHp = routeRelicBuffToZones({
+      effectId: "enemy-hp-absolute",
+      source: "relics",
+      buffIndex: 0,
+      key: "global_buff_normal",
+      blackboard: [
+        { key: "key", value: 0, valueStr: "enemy_max_hp_down" },
+        { key: "max_hp", value: 1.35, valueStr: null },
+      ],
+      jsonPath: "$.enemy-hp-absolute",
+    });
+    const context = new FormulaContext();
+    const defWrites = applyClassifiedEffectToFormulaContext(
+      context,
+      { id: "enemy-def", name: "敌人防御提升" },
+      enemyDefense.effect,
+    );
+    const hpWrites = applyClassifiedEffectToFormulaContext(
+      context,
+      { id: "enemy-hp", name: "敌人生命提升" },
+      enemyHp.effect,
+    );
+
+    expect(defWrites.map((entry) => entry.zoneId)).toEqual(["OUTER_ENEMY_DEF"]);
+    expect(defWrites[0]?.value).toBeCloseTo(0.35);
+    expect(hpWrites.map((entry) => entry.zoneId)).toEqual(["ENEMY_HP_RELIC"]);
+    expect(hpWrites[0]?.value).toBeCloseTo(0.35);
+  });
+
   it("古堡的子嗣按点数直加计算防御与法抗", () => {
     const context = new FormulaContext();
     const contributions = applyRelicItemsToFormulaContext(context, [{

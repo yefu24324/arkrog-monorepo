@@ -1,4 +1,4 @@
-import type { DamageZoneId } from "../domain/damage-zones.js";
+import type { FormulaZoneId } from "../domain/damage-zones.js";
 
 /** 公式当前计算的伤害类型，用于筛选只对特定伤害生效的贡献项。 */
 export type FormulaDamageType = "physical" | "magical" | "pure" | "elemental";
@@ -9,6 +9,16 @@ export type FormulaInputId =
   | "CHAR_HP0"
   | "CHAR_DEF0"
   | "CHAR_RES0"
+  | "DEPLOY_COST0"
+  | "INITIAL_DP0"
+  | "BLOCK_COUNT0"
+  | "INITIAL_SP0"
+  | "SP_COST0"
+  | "SP_RECOVERY_PER_SECOND0"
+  | "ENEMY_ATK0"
+  | "ENEMY_ATTACK_SPEED0"
+  | "ENEMY_MOVE_SPEED0"
+  | "DEPLOY_LIMIT0"
   | "DEF0"
   | "RES0"
   | "HP0"
@@ -18,6 +28,10 @@ export type FormulaInputId =
   | "PHYSICAL_MIN_DAMAGE_RATIO"
   | "MAGICAL_MIN_DAMAGE_RATIO"
   | "RAW_ELEMENTAL_DAMAGE"
+  | "RAW_ELEMENTAL_IMPAIRMENT"
+  | "RAW_INCOMING_DAMAGE"
+  | "ENEMY_EP_RESISTANCE0"
+  | "ENEMY_EP_DAMAGE_RESISTANCE0"
   | "BASE_ATTACK_INTERVAL";
 
 /** 公式 AST 的常量节点。 */
@@ -45,7 +59,7 @@ export interface ZoneExpression {
   /** 节点判别字段。 */
   kind: "zone";
   /** 被引用的稳定乘区 ID。 */
-  zoneId: DamageZoneId;
+  zoneId: FormulaZoneId;
   /** 可选伤害类型筛选。 */
   damageType?: FormulaDamageType;
 }
@@ -55,7 +69,7 @@ export interface FormulaReferenceExpression {
   /** 节点判别字段。 */
   kind: "formula";
   /** 被引用的稳定公式 ID。 */
-  formulaId: DamageFormulaId;
+  formulaId: FormulaId;
 }
 
 /** 公式 AST 的多参数运算节点。 */
@@ -79,14 +93,34 @@ export type FormulaExpression =
   | OperationExpression;
 
 /** 当前实验公式簿中的稳定公式 ID。 */
-export type DamageFormulaId =
+export type FormulaId =
   | "FINAL_ATK"
   | "FINAL_CHAR_HP"
   | "FINAL_CHAR_DEF"
   | "FINAL_CHAR_RES"
+  | "FINAL_DEPLOY_COST"
+  | "FINAL_INITIAL_DP"
+  | "FINAL_BLOCK_COUNT"
+  | "FINAL_INITIAL_SP"
+  | "FINAL_SP_COST"
+  | "FINAL_SP_RECOVERY_PER_SECOND"
+  | "SP_GAIN_PER_TRIGGER"
+  | "PHYSICAL_EVASION_RATE"
+  | "MAGICAL_EVASION_RATE"
+  | "FINAL_ENEMY_ATK"
+  | "FINAL_ENEMY_ATTACK_SPEED"
+  | "FINAL_ENEMY_MOVE_SPEED"
+  | "FINAL_DEPLOY_LIMIT"
+  | "FINAL_ENEMY_DEF"
+  | "FINAL_ENEMY_RES"
   | "EFFECTIVE_DEF"
   | "EFFECTIVE_RES"
   | "ENEMY_MAX_HP"
+  | "FINAL_ENEMY_DAMAGE_RESISTANCE"
+  | "CHAR_TAKEN_DAMAGE"
+  | "ENEMY_OUTGOING_DAMAGE"
+  | "ELEMENTAL_IMPAIRMENT_TO_ENEMY"
+  | "ELEMENTAL_IMPAIRMENT_TO_CHAR"
   | "PHYSICAL_MAIN_DAMAGE"
   | "MAGICAL_MAIN_DAMAGE"
   | "PURE_MAIN_DAMAGE"
@@ -94,10 +128,13 @@ export type DamageFormulaId =
   | "TOTAL_DAMAGE"
   | "DPS";
 
+/** @deprecated 公式簿已不限于伤害，请使用 FormulaId。 */
+export type DamageFormulaId = FormulaId;
+
 /** 一条有名称、有根节点的完整公式。 */
-export interface DamageFormulaDefinition {
+export interface FormulaDefinition {
   /** 稳定公式 ID。 */
-  id: DamageFormulaId;
+  id: FormulaId;
   /** 人类可读名称。 */
   name: string;
   /** 公式左侧使用的短符号。 */
@@ -107,6 +144,9 @@ export interface DamageFormulaDefinition {
   /** 公式的 AST 根节点。 */
   expression: FormulaExpression;
 }
+
+/** @deprecated 公式簿已不限于伤害，请使用 FormulaDefinition。 */
+export type DamageFormulaDefinition = FormulaDefinition;
 
 /** 创建数值常量节点。 */
 export function constant(value: number): ConstantExpression {
@@ -119,12 +159,12 @@ export function input(inputId: FormulaInputId, symbol: string, tooltip: string):
 }
 
 /** 创建乘区引用节点。 */
-export function zone(zoneId: DamageZoneId, damageType?: FormulaDamageType): ZoneExpression {
+export function zone(zoneId: FormulaZoneId, damageType?: FormulaDamageType): ZoneExpression {
   return { kind: "zone", zoneId, damageType };
 }
 
 /** 创建子公式引用节点。 */
-export function formula(formulaId: DamageFormulaId): FormulaReferenceExpression {
+export function formula(formulaId: FormulaId): FormulaReferenceExpression {
   return { kind: "formula", formulaId };
 }
 

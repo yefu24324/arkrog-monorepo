@@ -8,8 +8,17 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ChevronDown, Search, X } from 'lucide-react';
 import type {
+  ExportedRoguelikeTopicArtifact,
+  OriginalRogueCustomizedDifficultyData,
+  OriginalRogueDifficultyData,
   WrappedRelicItem,
   WrappedRelicTopicArtifact,
+} from '@arkrog/arknights-schema/game-data';
+import {
+  FORMULA_ZONES,
+  getManualTopicDifficultyEffects,
+  routeRogueDifficultyToZones,
+  routeSelectedRogueDifficultyToZones,
 } from '@arkrog/arknights-knowledge-graph/formula';
 import { CombatPreviewPanel } from '@/components/combat-preview-panel';
 import { cn } from '@/lib/cn';
@@ -82,6 +91,35 @@ interface RelicZoneTableProps {
   /** 集成战略主题 ID，例如 rogue_6。 */
   topicId: string;
   className?: string;
+}
+
+/** UI 中稳定标识一个主题难度。 */
+function difficultyKey(difficulty: OriginalRogueDifficultyData): string {
+  return `${difficulty.modeDifficulty}:${difficulty.grade}`;
+}
+
+/** 按模式和等级关联主题机制难度扩展。 */
+function findCustomizedDifficulty(
+  topic: ExportedRoguelikeTopicArtifact,
+  difficulty: OriginalRogueDifficultyData,
+): OriginalRogueCustomizedDifficultyData | undefined {
+  return topic.customizedDifficulties.find(
+    (candidate) =>
+      candidate.modeDifficulty === difficulty.modeDifficulty &&
+      candidate.grade === difficulty.grade,
+  );
+}
+
+/** 把 formula 稳定乘区 ID 转换为藏品表格共用的徽章结构。 */
+function formulaZoneRefs(zoneIds: readonly string[]): RelicZoneRef[] {
+  const selected = new Set(zoneIds);
+  return Object.values(FORMULA_ZONES)
+    .filter((zone) => selected.has(zone.id))
+    .map((zone) => ({
+      id: zone.id,
+      symbol: zone.symbol,
+      name: zone.name,
+    }));
 }
 
 /** 从全部藏品中收集可选乘区，按 symbol 稳定排序。 */
@@ -266,6 +304,159 @@ function Field({
   );
 }
 
+/** 主题机制扩展使用原始字段展示，不把 development buff ID 当作战斗 buff。 */
+function customizedDifficultyText(
+  customized: OriginalRogueCustomizedDifficultyData | undefined,
+): string {
+  if (!customized) return '—';
+  const descriptions = customized.buffDesc ?? [];
+  const mechanics = Object.entries(customized)
+    .filter(
+      ([key, value]) =>
+        !['modeDifficulty', 'grade', 'buffs', 'buffDesc'].includes(key) &&
+        value !== null &&
+        value !== undefined,
+    )
+    .map(([key, value]) => `${key}: ${String(value)}`);
+  const developmentIds = customized.buffs?.length
+    ? `发展节点：${customized.buffs.join(', ')}`
+    : '';
+  return [...descriptions, ...mechanics, developmentIds].filter(Boolean).join('；') || '—';
+}
+
+/** 难度单选表：每行展示本级原始规则、主题扩展和 Kuzu 同源公式乘区。 */
+function DifficultySelectionTable({
+  topicId,
+  topic,
+  selectedKey,
+  onSelect,
+}: {
+  topicId: string;
+  topic: ExportedRoguelikeTopicArtifact;
+  selectedKey: string | null;
+  onSelect: (difficulty: OriginalRogueDifficultyData) => void;
+}) {
+  const selectedDifficulty =
+    topic.difficulties.find((difficulty) => difficultyKey(difficulty) === selectedKey) ?? null;
+  const selectedRoute = routeSelectedRogueDifficultyToZones({
+    topicId,
+    difficulties: topic.difficulties,
+    selectedDifficulty,
+  });
+  // 难度选择只展示固定难度规则，不混入失败助力或上一局遗留支援。
+  const cumulativeZones = formulaZoneRefs([
+    ...selectedRoute.effects.map((effect) => effect.zoneId),
+    // 人工主题规则由 formula 独立提供，不属于 Kuzu 同源 effects。
+    ...selectedRoute.manualTopicEffects.map((effect) => effect.zoneId),
+  ]);
+
+  return (
+    <section className="overflow-hidden rounded-2xl border bg-fd-card text-fd-card-foreground">
+      <div className="border-b p-4">
+        <h2 className="text-base font-semibold">难度选择</h2>
+        <p className="mt-1 text-sm text-fd-muted-foreground">
+          NORMAL 模式会累计此前等级；发展节点仅展示主题机制，不作为战斗 buff。
+        </p>
+        {selectedDifficulty ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-fd-muted-foreground">
+              当前：{selectedDifficulty.name} {selectedDifficulty.grade} · 累计公式乘区
+            </span>
+            <ZoneBadges zones={cumulativeZones} />
+          </div>
+        ) : null}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[64rem] border-collapse text-sm">
+          <thead>
+            <tr className="border-b bg-fd-muted/40 text-left text-fd-muted-foreground">
+              <th className="w-12 px-3 py-2.5 font-medium">选择</th>
+              <th className="w-28 px-3 py-2.5 font-medium">模式</th>
+              <th className="w-20 px-3 py-2.5 font-medium">等级</th>
+              <th className="w-[30%] px-3 py-2.5 font-medium">原始难度规则</th>
+              <th className="w-[26%] px-3 py-2.5 font-medium">主题机制扩展</th>
+              <th className="px-3 py-2.5 font-medium">本级新增乘区</th>
+            </tr>
+          </thead>
+          <tbody>
+            {topic.difficulties.map((difficulty, index) => {
+              const key = difficultyKey(difficulty);
+              const customized = findCustomizedDifficulty(topic, difficulty);
+              const route = routeRogueDifficultyToZones({
+                topicId,
+                difficulty,
+                difficultyIndex: index,
+              });
+              // 黑流树海低难度规则按精确等级读取，禁止进入 NORMAL 累计规则表。
+              const manualTopicEffects = getManualTopicDifficultyEffects({
+                topicId,
+                selectedDifficulty: difficulty,
+              });
+              return (
+                <tr
+                  key={key}
+                  className={cn(
+                    'border-b align-top last:border-b-0 hover:bg-fd-accent/30',
+                    selectedKey === key && 'bg-fd-primary/5',
+                  )}
+                >
+                  <td className="px-3 py-3">
+                    <input
+                      type="radio"
+                      name={`difficulty-${topicId}`}
+                      checked={selectedKey === key}
+                      onChange={() => onSelect(difficulty)}
+                      aria-label={`选择 ${difficulty.modeDifficulty} ${difficulty.grade}`}
+                      className="size-4 accent-[var(--color-fd-primary)]"
+                    />
+                  </td>
+                  <td className="px-3 py-3 font-mono text-xs">{difficulty.modeDifficulty}</td>
+                  <td className="px-3 py-3">
+                    <span className="font-medium">{difficulty.grade}</span>
+                    <span className="mt-1 block text-xs text-fd-muted-foreground">
+                      {difficulty.name}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3 leading-relaxed">
+                    <p>{difficulty.ruleDesc}</p>
+                    {manualTopicEffects.length > 0 ? (
+                      <div className="mt-1.5 rounded-lg border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-xs">
+                        <span className="font-medium text-amber-700 dark:text-amber-300">
+                          人工维护主题规则：
+                        </span>
+                        {manualTopicEffects.map((effect) => effect.description).join('；')}
+                        <span className="mt-0.5 block text-fd-muted-foreground">
+                          不属于 GameData 或 Kuzu 图谱事实，仅在该精确难度生效。
+                        </span>
+                      </div>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-3 text-xs leading-relaxed text-fd-muted-foreground">
+                    {customizedDifficultyText(customized)}
+                  </td>
+                  <td className="px-3 py-3">
+                    <ZoneBadges
+                      zones={formulaZoneRefs([
+                        ...route.zoneIds,
+                        ...manualTopicEffects.map((effect) => effect.zoneId),
+                      ])}
+                    />
+                    <p className="mt-1 text-[0.68rem] text-fd-muted-foreground">
+                      {manualTopicEffects.length > 0 ? 'manual + ' : ''}
+                      {route.classification}
+                      {route.unclassifiedReason ? ` · ${route.unclassifiedReason}` : ''}
+                    </p>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 /** 单行藏品：多选 + 主信息行 + 可选展开的 buffs 详情行。 */
 function RelicRow({
   item,
@@ -392,6 +583,11 @@ function RelicRow({
 /** 藏品乘区高级表格。 */
 export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
   const [data, setData] = useState<RelicZoneTableData | null>(null);
+  /** relics:export 的主题与完整难度原始数据。 */
+  const [topicArtifact, setTopicArtifact] =
+    useState<ExportedRoguelikeTopicArtifact | null>(null);
+  /** 用户在难度表中的单选项。 */
+  const [selectedDifficultyKey, setSelectedDifficultyKey] = useState<string | null>(null);
   /** 原始包装藏品是公式输入；乘区 JSON 只负责表格展示。 */
   const [wrappedRelics, setWrappedRelics] = useState<WrappedRelicItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -407,18 +603,22 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
     // 按主题拉取静态 JSON；切换主题时取消上一次请求结果。
     void Promise.all([
       fetch(`/data/relic-zones/${topicId}.json`),
-      fetch(`/data/wrapped-relics/${topicId}.json`),
+      fetch(`/data/relics/${topicId}.json`),
+      fetch(`/data/roguelike/topics/${topicId}.json`),
     ])
-      .then(async ([zoneResponse, wrappedResponse]) => {
-        if (!zoneResponse.ok || !wrappedResponse.ok) {
-          throw new Error(`HTTP zones=${zoneResponse.status}, wrapped=${wrappedResponse.status}`);
+      .then(async ([zoneResponse, wrappedResponse, topicResponse]) => {
+        if (!zoneResponse.ok || !wrappedResponse.ok || !topicResponse.ok) {
+          throw new Error(
+            `HTTP zones=${zoneResponse.status}, wrapped=${wrappedResponse.status}, topic=${topicResponse.status}`,
+          );
         }
         return Promise.all([
           zoneResponse.json() as Promise<RelicZoneTableData>,
           wrappedResponse.json() as Promise<WrappedRelicTopicArtifact>,
+          topicResponse.json() as Promise<ExportedRoguelikeTopicArtifact>,
         ]);
       })
-      .then(([payload, wrappedPayload]) => {
+      .then(([payload, wrappedPayload, topicPayload]) => {
         if (cancelled) return;
         const wrappedIds = new Set(wrappedPayload.items.map((item) => item.id));
         const missing = (payload.items ?? []).find((item) => !wrappedIds.has(item.id));
@@ -430,6 +630,14 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
           items: payload.items ?? [],
         });
         setWrappedRelics(wrappedPayload.items ?? []);
+        setTopicArtifact(topicPayload);
+        // 默认选择 NORMAL 0；旧主题缺少时回退到第一条原始难度。
+        const defaultDifficulty =
+          topicPayload.difficulties.find(
+            (difficulty) =>
+              difficulty.modeDifficulty === 'NORMAL' && difficulty.grade === 0,
+          ) ?? topicPayload.difficulties[0];
+        setSelectedDifficultyKey(defaultDifficulty ? difficultyKey(defaultDifficulty) : null);
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -475,6 +683,15 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
   const selectedRelics = useMemo(() => {
     return wrappedRelics.filter((item) => selectedRelicIdSet.has(item.id));
   }, [wrappedRelics, selectedRelicIdSet]);
+
+  /** 当前难度完整原始对象，同时传给 graph formula 写入上下文。 */
+  const selectedDifficulty = useMemo(() => {
+    return (
+      topicArtifact?.difficulties.find(
+        (difficulty) => difficultyKey(difficulty) === selectedDifficultyKey,
+      ) ?? null
+    );
+  }, [selectedDifficultyKey, topicArtifact]);
 
   const allFilteredSelected =
     filtered.length > 0 && filtered.every((item) => selectedRelicIdSet.has(item.id));
@@ -551,7 +768,7 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
     );
   }
 
-  if (!data) {
+  if (!data || !topicArtifact) {
     return (
       <div
         className={cn(
@@ -566,7 +783,19 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
 
   return (
     <div className={cn('not-prose my-4 space-y-4', className)}>
-      <CombatPreviewPanel topicId={topicId} selectedRelics={selectedRelics} />
+      <DifficultySelectionTable
+        topicId={topicId}
+        topic={topicArtifact}
+        selectedKey={selectedDifficultyKey}
+        onSelect={(difficulty) => setSelectedDifficultyKey(difficultyKey(difficulty))}
+      />
+
+      <CombatPreviewPanel
+        topicId={topicId}
+        selectedRelics={selectedRelics}
+        difficulties={topicArtifact.difficulties}
+        selectedDifficulty={selectedDifficulty}
+      />
 
       <div className="rounded-2xl border bg-fd-card p-4 text-fd-card-foreground shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">

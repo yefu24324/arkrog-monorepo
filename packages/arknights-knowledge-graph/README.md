@@ -51,6 +51,52 @@ evaluateDamageFormula("FINAL_ATK", context, { ATK0: 100 });
 
 实现：`src/lib/formula/activation.ts`、`relic-programs.ts`、`relic-contributions.ts`、`relic-template-programs.ts`。
 
+## 肉鸽难度 → 公式簿程序
+
+难度原始事实来自 `roguelike_topic_table.json` 的
+`details[topicId].difficulties[].ruleDesc`。`customizeData[].difficulties[].buffs`
+是发展树节点 ID，只用于主题机制展示，不作为战斗 buff。
+
+```ts
+import {
+  FormulaContext,
+  applyRogueDifficultyToFormulaContext,
+  routeRogueDifficultyToZones,
+  routeSelectedRogueDifficultyToZones,
+} from "@arkrog/arknights-knowledge-graph/formula";
+
+const context = new FormulaContext();
+const route = routeRogueDifficultyToZones({
+  topicId: "rogue_6",
+  difficulty: topic.difficulties[11],
+  difficultyIndex: 11,
+});
+const cumulativeRoute = routeSelectedRogueDifficultyToZones({
+  topicId: "rogue_6",
+  difficulties: topic.difficulties,
+  selectedDifficulty: topic.difficulties[11],
+});
+const contributions = applyRogueDifficultyToFormulaContext(context, {
+  topicId: "rogue_6",
+  difficulties: topic.difficulties,
+  selectedDifficulty: topic.difficulties[11],
+  activation: { enemy: { id: enemy.id, levelType: enemy.levelType } },
+  conditionalRelics: topic.difficultyConditionalRelics,
+  // 失败助力和上一局遗留支援默认关闭，只有用户确认条件成立并选择后才传入。
+  enabledConditionalRelicIds: ["rogue_6_legacy_06:0:rogue_6_start_3"],
+});
+```
+
+- `NORMAL` 难度会累计同模式中不高于所选 grade 的效果；特殊模式只应用自身。
+- Kuzu 使用 `RogueDifficulty -> DifficultyEffect -> DamageZone` 保存原始描述、数值、目标、规则和证据路径。
+- `RogueDifficulty -> DIFFICULTY_HAS_CONDITIONAL_ITEM -> Item -> Effect -> DamageZone` 保存难度可用的失败助力与遗留支援；它们默认不生效。
+- 例如“襁褓巨龙”来自 `legacy_06 -> choice_ro6_startbuff_9 -> start_3`，需上一局至少通过两个区域且本局选择后，才把 `max_hp=0.5` 写入 `ENEMY_HP_RELIC`。
+- formula 与 Kuzu 共用 `difficulty-rules.ts`，不存在浏览器端第二份乘区表。
+- 完整 `ruleDesc` 是版本护栏；原文更新后旧规则会失配并返回 `unknown`。
+- 静态表缺失的主题特有规则不进入 Kuzu 同源难度事实；统一放在 `src/lib/formula/topic-rules/` 下并标记为人工维护。
+- `rogue_6` NORMAL 0–3 的低难度敌方生命与攻击修正由 `topic-rules/rogue-6.ts` 按精确等级写入，禁止向更高难度累计。
+- 客户端未提供战斗实现的主题机制、特定敌人和无数值效果保持未知，不根据文案补造参数。
+
 ## 命令
 
 ```bash
@@ -61,14 +107,13 @@ pnpm graph:export rogue_6
 pnpm graph:export:all
 pnpm graph:test
 pnpm graph:typecheck
-pnpm relics:export
 ```
 
-`export` 按主题写出两份独立 JSON：
+`graph:export` 只负责依赖 Kuzu 的乘区验证，并按主题写出两份独立 JSON：
 
 - `docs/game/relic-zone-validation/graph/rogue_N.json`：只读取 Kuzu 的 `EFFECT_ENTERS_ZONE` 预测边。
 - `docs/game/relic-zone-validation/formula/rogue_N.json`：使用公式贡献函数检查可写入乘区；所有 buff 假定生效，不执行公式数值求值。
 
 稀疏人工修正位于 `docs/game/relic-zone-validation/human/`。文档站最终显示按 `human > formula` 回退，human 不参与生产图谱或公式路由。
 
-`pnpm relics:export` 按主题生成 `docs/game/wrapped-relics/rogue_N.json`，并同步同字节文件到 docs 与 frontend 的 `public/data/wrapped-relics/`。
+游戏数据整理、合并与自定义目录输出统一使用仓库根目录的 `pnpm relics:export`。该命令由 schema 包提供，不属于图谱工具，也不会加载或初始化 Kuzu。

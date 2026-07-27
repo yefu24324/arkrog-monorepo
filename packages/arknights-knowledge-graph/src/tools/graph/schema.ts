@@ -5,6 +5,8 @@ const NODE_TABLES = [
   "CREATE NODE TABLE Source(id STRING, kind STRING, path STRING, digest STRING, PRIMARY KEY(id))",
   "CREATE NODE TABLE SchemaDefinition(id STRING, name STRING, kind STRING, sourcePath STRING, PRIMARY KEY(id))",
   "CREATE NODE TABLE Item(id STRING, rawId STRING, topic STRING, name STRING, description STRING, rarity STRING, itemType STRING, jsonPath STRING, PRIMARY KEY(id))",
+  "CREATE NODE TABLE RogueDifficulty(id STRING, topic STRING, modeDifficulty STRING, grade INT64, name STRING, ruleDesc STRING, classification STRING, unclassifiedReason STRING, jsonPath STRING, PRIMARY KEY(id))",
+  "CREATE NODE TABLE DifficultyEffect(id STRING, matchedText STRING, numericValue DOUBLE, target STRING, damageTypes STRING, evidenceKind STRING, jsonPath STRING, PRIMARY KEY(id))",
   "CREATE NODE TABLE Effect(id STRING, key STRING, parameters STRING, sourceKind STRING, jsonPath STRING, PRIMARY KEY(id))",
   "CREATE NODE TABLE Parameter(id STRING, key STRING, numericValue DOUBLE, stringValue STRING, jsonPath STRING, PRIMARY KEY(id))",
   "CREATE NODE TABLE Field(id STRING, path STRING, description STRING, PRIMARY KEY(id))",
@@ -18,17 +20,22 @@ const NODE_TABLES = [
 const REL_TABLES = [
   "CREATE REL TABLE SOURCE_DECLARES_SCHEMA(FROM Source TO SchemaDefinition)",
   "CREATE REL TABLE SOURCE_CONTAINS_ITEM(FROM Source TO Item)",
+  "CREATE REL TABLE SOURCE_CONTAINS_DIFFICULTY(FROM Source TO RogueDifficulty)",
   "CREATE REL TABLE SOURCE_DEFINES_MECHANIC(FROM Source TO Mechanic)",
   "CREATE REL TABLE SCHEMA_DESCRIBES_FIELD(FROM SchemaDefinition TO Field)",
   "CREATE REL TABLE ITEM_HAS_EFFECT(FROM Item TO Effect)",
+  "CREATE REL TABLE DIFFICULTY_HAS_EFFECT(FROM RogueDifficulty TO DifficultyEffect)",
+  "CREATE REL TABLE DIFFICULTY_HAS_CONDITIONAL_ITEM(FROM RogueDifficulty TO Item, kind STRING, sourceItemId STRING, choiceId STRING, buffIndex INT64, evidencePath STRING)",
   "CREATE REL TABLE EFFECT_HAS_PARAMETER(FROM Effect TO Parameter)",
   "CREATE REL TABLE EFFECT_USES_MECHANIC(FROM Effect TO Mechanic)",
   "CREATE REL TABLE MECHANIC_HAS_ACTION(FROM Mechanic TO MechanicAction)",
   "CREATE REL TABLE PARAMETER_MATCHES_FIELD(FROM Parameter TO Field)",
   "CREATE REL TABLE RULE_TARGETS_ZONE(FROM SemanticRule TO DamageZone)",
   "CREATE REL TABLE EFFECT_PREDICTED_BY(FROM Effect TO SemanticRule)",
+  "CREATE REL TABLE DIFFICULTY_EFFECT_PREDICTED_BY(FROM DifficultyEffect TO SemanticRule)",
   "CREATE REL TABLE FIELD_ENTERS_ZONE(FROM Field TO DamageZone, ruleId STRING, status STRING, confidence DOUBLE, reason STRING, evidencePath STRING)",
   "CREATE REL TABLE EFFECT_ENTERS_ZONE(FROM Effect TO DamageZone, ruleId STRING, status STRING, confidence DOUBLE, reason STRING, evidencePath STRING)",
+  "CREATE REL TABLE DIFFICULTY_EFFECT_ENTERS_ZONE(FROM DifficultyEffect TO DamageZone, ruleId STRING, status STRING, confidence DOUBLE, reason STRING, evidencePath STRING)",
 ] as const;
 
 /** 在空数据库中创建完整属性图 schema。 */

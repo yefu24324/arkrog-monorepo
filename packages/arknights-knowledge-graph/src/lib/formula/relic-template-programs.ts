@@ -5,12 +5,12 @@
 
 import type { FormulaDamageType } from "./ast.js";
 import type { RelicEffectForContribution } from "./relic-contributions.js";
-import type { DamageZoneId } from "../domain/damage-zones.js";
+import type { FormulaZoneId } from "../domain/damage-zones.js";
 
 /** 模板或规则程序完成语义解释后产生的标准写入指令。 */
 export interface RelicFormulaWrite {
   /** 指令写入的公式乘区。 */
-  zoneId: DamageZoneId;
+  zoneId: FormulaZoneId;
   /** 已按乘区方向规范化的数值。 */
   value: number;
   /** 真正提供数值的黑板参数。 */
@@ -21,6 +21,8 @@ export interface RelicFormulaWrite {
   reason: string;
   /** 未指定时对所有伤害类型生效。 */
   damageTypes?: readonly FormulaDamageType[];
+  /** 事件型资源贡献适用的触发事件。 */
+  triggerTypes?: readonly string[];
 }
 
 /** 单件藏品程序可用的用户态输入。 */
@@ -73,7 +75,7 @@ function boundedLayer(
 /** 构造只做同名数值读取的语义规则程序。 */
 function directParameterProgram(
   parameterKey: string,
-  zoneId: DamageZoneId,
+  zoneId: FormulaZoneId,
 ): RelicRuleProgram {
   return (effect, prediction) => {
     const value = blackboardNumber(effect, parameterKey);
@@ -91,7 +93,7 @@ function directParameterProgram(
 /** 构造敌方减益程序：GameData 使用负值，公式乘区统一保存正的降低量。 */
 function enemyReductionProgram(
   parameterKey: string,
-  zoneId: DamageZoneId,
+  zoneId: FormulaZoneId,
 ): RelicRuleProgram {
   return (effect, prediction) => {
     const value = blackboardNumber(effect, parameterKey);
@@ -106,6 +108,126 @@ function enemyReductionProgram(
   };
 }
 
+/** 将敌人属性的两种 GameData 编码统一为 `1 + delta` 的增量约定。 */
+function enemyAttributeDeltaProgram(
+  parameterKey: string,
+  zoneId: FormulaZoneId,
+): RelicRuleProgram {
+  return (effect, prediction) => {
+    const value = blackboardNumber(effect, parameterKey);
+    if (value === undefined) return null;
+    return {
+      zoneId,
+      // 旧主题的 1.35 表示绝对 135%，新属性表的 -0.07 表示增量 -7%。
+      value: value >= 1 ? value - 1 : value,
+      parameterKey,
+      ruleId: prediction.ruleId,
+      reason: prediction.reason,
+    };
+  };
+}
+
+/** 黑板提供绝对倍率时不转换为增量。 */
+function absoluteMultiplierProgram(
+  parameterKey: string,
+  zoneId: FormulaZoneId,
+): RelicRuleProgram {
+  return directParameterProgram(parameterKey, zoneId);
+}
+
+/** ensure_block 模板没有数值黑板，稳定写入最低阻挡数 1。 */
+function minimumBlockProgram(
+  effect: RelicEffectForContribution,
+  prediction: RelicEffectForContribution["predictions"][number],
+): RelicFormulaWrite {
+  return {
+    zoneId: "MIN_BLOCK_COUNT",
+    value: 1,
+    parameterKey: "key",
+    ruleId: prediction.ruleId,
+    reason: prediction.reason,
+  };
+}
+
+/** 将非出生 sp 效果保留为带事件标签的单次技力回复。 */
+function triggeredSpProgram(
+  effect: RelicEffectForContribution,
+  prediction: RelicEffectForContribution["predictions"][number],
+): RelicFormulaWrite | null {
+  const value = blackboardNumber(effect, "sp");
+  if (value === undefined) return null;
+  return {
+    zoneId: "SP_GAIN_PER_TRIGGER",
+    value,
+    parameterKey: "sp",
+    ruleId: prediction.ruleId,
+    reason: prediction.reason,
+    // 保留模板名作为稳定事件维度，避免攻击、受击、击倒等回复被直接相加。
+    triggerTypes: [effect.mechanicName || effect.key],
+  };
+}
+
+/** 闪避概率可同时写入物理与法术两个独立并集。 */
+function evasionProgram(zoneId: "PHYSICAL_EVASION" | "MAGICAL_EVASION"): RelicRuleProgram {
+  return (effect, prediction) => {
+    const value = blackboardNumber(effect, "prob");
+    return value === undefined ? null : {
+      zoneId,
+      value,
+      parameterKey: "prob",
+      ruleId: prediction.ruleId,
+      reason: prediction.reason,
+    };
+  };
+}
+
+/** 命中率 FINAL_SCALER 使用负增量，公式上下文统一保存正向闪避概率。 */
+function hitrateToEvasionProgram(
+  parameterKey: "damage_hitrate_physical" | "damage_hitrate_magical",
+  zoneId: "PHYSICAL_EVASION" | "MAGICAL_EVASION",
+): RelicRuleProgram {
+  return (effect, prediction) => {
+    const value = blackboardNumber(effect, parameterKey);
+    return value === undefined ? null : {
+      zoneId,
+      value: Math.abs(value),
+      parameterKey,
+      ruleId: prediction.ruleId,
+      reason: prediction.reason,
+    };
+  };
+}
+
+/** 普通物理法术减伤使用并集；方向由语义规则选择具体乘区。 */
+function damageResistanceProgram(zoneId: FormulaZoneId): RelicRuleProgram {
+  return (effect, prediction) => {
+    const value = blackboardNumber(effect, "damage_resistance");
+    return value === undefined ? null : {
+      zoneId,
+      value,
+      parameterKey: "damage_resistance",
+      ruleId: prediction.ruleId,
+      reason: prediction.reason,
+      damageTypes: ["physical", "magical"],
+    };
+  };
+}
+
+/** ep_damage_scale 是绝对倍率，转为独立增量后进入元素损伤放大区。 */
+function elementalImpairmentScaleProgram(
+  effect: RelicEffectForContribution,
+  prediction: RelicEffectForContribution["predictions"][number],
+): RelicFormulaWrite | null {
+  const value = blackboardNumber(effect, "ep_damage_scale");
+  return value === undefined ? null : {
+    zoneId: "ELEMENTAL_IMPAIRMENT_AMPLIFICATION",
+    value: value >= 1 ? value - 1 : value,
+    parameterKey: "ep_damage_scale",
+    ruleId: prediction.ruleId,
+    reason: prediction.reason,
+  };
+}
+
 /** `damage_scale` 的绝对倍率需要转成 product-one-plus 约定的增量。 */
 function damageScaleProgram(
   effect: RelicEffectForContribution,
@@ -113,7 +235,7 @@ function damageScaleProgram(
 ): RelicFormulaWrite | null {
   const parameter = blackboardNumberByPattern(
     effect,
-    /^(damage_scale|ep_damage_scale|damage_scale_factor)$/,
+    /^(damage_scale|damage_scale_factor)$/,
   );
   if (!parameter) return null;
   return {
@@ -122,6 +244,8 @@ function damageScaleProgram(
     parameterKey: parameter.key,
     ruleId: prediction.ruleId,
     reason: prediction.reason,
+    // DamageScale 的 ELEMENT 模板只放大实际元素伤害，不能污染物理、法术或元素损伤累计。
+    damageTypes: effect.mechanicName === "enemy_take_element_damage_up" ? ["elemental"] : undefined,
   };
 }
 
@@ -206,11 +330,28 @@ function applyTriggeredDefenseAndResistanceTemplate(
   return writes;
 }
 
+/** 襁褓巨龙：模板的 max_hp=0.5 表示敌方最终生命降低 50%，公式区保存 -0.5 增量。 */
+function applyRogue6Start3Template(
+  effect: RelicEffectForContribution,
+  _context: RelicFormulaProgramContext,
+): readonly RelicFormulaWrite[] {
+  const value = blackboardNumber(effect, "max_hp");
+  if (value === undefined) return [];
+  return [{
+    zoneId: "ENEMY_HP_RELIC",
+    value: -Math.abs(value),
+    parameterKey: "max_hp",
+    ruleId: "template:rogue_6_start_3",
+    reason: "战斗模板 rogue_6_start_3 对敌方写入 MAX_HP FINAL_SCALER；GameData 效果原文确认 0.5 为生命降低 50%。",
+  }];
+}
+
 /** 已由 GameData Action 核实、需要精确控制上下文写入目标的战斗模板。 */
 export const RELIC_TEMPLATE_PROGRAMS: ReadonlyMap<string, RelicTemplateProgram> = new Map([
   ["rogue_6_pioneer_skill", applyRogue6PioneerSkillTemplate],
   ["rogue_6_caster_attack", applyRogue6CasterAttackTemplate],
   ["attr_up_on_trigger[def&mag_resist]", applyTriggeredDefenseAndResistanceTemplate],
+  ["rogue_6_start_3", applyRogue6Start3Template],
 ]);
 
 /** 通用语义规则程序只处理规则已经明确声明的参数和目标乘区。 */
@@ -234,11 +375,38 @@ const RELIC_RULE_PROGRAMS: ReadonlyMap<string, RelicRuleProgram> = new Map([
   ["char-res-flat-addition", directParameterProgram("magic_resistance", "FLAT_CHAR_RES")],
   ["attack-speed-addition", attackSpeedProgram],
   ["enemy-defense-percent", enemyReductionProgram("def", "DEF_PERCENT")],
-  ["enemy-hp-relic", enemyReductionProgram("max_hp", "ENEMY_HP_RELIC")],
-  ["enemy-hp-copper", enemyReductionProgram("max_hp", "ENEMY_HP_COPPER")],
+  ["enemy-hp-relic", enemyAttributeDeltaProgram("max_hp", "ENEMY_HP_RELIC")],
+  ["enemy-hp-copper", enemyAttributeDeltaProgram("max_hp", "ENEMY_HP_COPPER")],
+  ["enemy-hp-legacy-support-action", enemyAttributeDeltaProgram("max_hp", "ENEMY_HP_RELIC")],
+  ["enemy-hp-legacy-support-fallback", enemyAttributeDeltaProgram("max_hp", "ENEMY_HP_RELIC")],
   ["target-res-flat-addition", enemyReductionProgram("magic_resistance", "RES_FLAT")],
   ["target-res-percent-multiplier", enemyReductionProgram("magic_resistance", "RES_PERCENT")],
   ["target-def-flat-addition", enemyReductionProgram("def", "DEF_FLAT")],
+  ["deploy-cost-addition", directParameterProgram("cost", "DEPLOY_COST_ADD")],
+  ["deploy-cost-multiplier", directParameterProgram("cost", "DEPLOY_COST_MULTIPLIER")],
+  ["initial-dp-addition", directParameterProgram("value", "INITIAL_DP_ADD")],
+  ["block-count-addition", directParameterProgram("block_cnt", "BLOCK_COUNT_ADD")],
+  ["minimum-block-count", minimumBlockProgram],
+  ["initial-sp-addition", directParameterProgram("sp", "INITIAL_SP_ADD")],
+  ["triggered-sp-gain", triggeredSpProgram],
+  ["sp-recovery-per-second-addition", directParameterProgram("sp_recovery_per_sec", "SP_RECOVERY_PER_SECOND_ADD")],
+  ["sp-cost-absolute-scale", absoluteMultiplierProgram("scale", "SP_COST_MULTIPLIER")],
+  ["physical-evasion-probability", evasionProgram("PHYSICAL_EVASION")],
+  ["magical-evasion-probability", evasionProgram("MAGICAL_EVASION")],
+  ["physical-hitrate-final-scaler", hitrateToEvasionProgram("damage_hitrate_physical", "PHYSICAL_EVASION")],
+  ["magical-hitrate-final-scaler", hitrateToEvasionProgram("damage_hitrate_magical", "MAGICAL_EVASION")],
+  ["enemy-atk-outer-multiplier", enemyAttributeDeltaProgram("atk", "OUTER_ENEMY_ATK")],
+  ["enemy-def-outer-multiplier", enemyAttributeDeltaProgram("def", "OUTER_ENEMY_DEF")],
+  ["enemy-def-outer-attribute-multiplier", enemyAttributeDeltaProgram("def", "OUTER_ENEMY_DEF")],
+  ["enemy-res-static-addition", directParameterProgram("magic_resistance", "ENEMY_RES_ADD")],
+  ["char-damage-resistance-action", damageResistanceProgram("CHAR_DAMAGE_RESISTANCE")],
+  ["enemy-outgoing-damage-reduction-action", damageResistanceProgram("ENEMY_OUTGOING_DAMAGE_REDUCTION")],
+  ["char-damage-resistance-mechanic-fallback", damageResistanceProgram("CHAR_DAMAGE_RESISTANCE")],
+  ["enemy-outgoing-damage-reduction-fallback", damageResistanceProgram("ENEMY_OUTGOING_DAMAGE_REDUCTION")],
+  ["enemy-damage-resistance-outer-max", damageResistanceProgram("OUTER_ENEMY_DAMAGE_RESISTANCE")],
+  ["char-elemental-impairment-resistance", directParameterProgram("ep_damage_resistance", "CHAR_EP_DAMAGE_RESISTANCE")],
+  ["char-elemental-impairment-resistance-fallback", directParameterProgram("ep_damage_resistance", "CHAR_EP_DAMAGE_RESISTANCE")],
+  ["elemental-impairment-amplification", elementalImpairmentScaleProgram],
   ["damage-scale-action", damageScaleProgram],
   ["damage-scale-blackboard", damageScaleProgram],
 ]);

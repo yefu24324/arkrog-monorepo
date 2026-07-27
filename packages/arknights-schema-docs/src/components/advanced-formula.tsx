@@ -14,7 +14,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import type {
-  DamageFormulaId,
+  FormulaId,
   FormulaDamageType,
   FormulaExpression,
   FormulaInputId,
@@ -32,6 +32,16 @@ const INPUT_LABELS: Record<FormulaInputId, string> = {
   CHAR_HP0: '基础最大生命',
   CHAR_DEF0: '基础防御力',
   CHAR_RES0: '基础法术抗性',
+  DEPLOY_COST0: '基础部署费用',
+  INITIAL_DP0: '基础初始部署费用',
+  BLOCK_COUNT0: '基础阻挡数',
+  INITIAL_SP0: '基础初始技力',
+  SP_COST0: '基础技力消耗',
+  SP_RECOVERY_PER_SECOND0: '基础每秒技力恢复',
+  ENEMY_ATK0: '敌方基础攻击力',
+  ENEMY_ATTACK_SPEED0: '敌方基础攻击速度',
+  ENEMY_MOVE_SPEED0: '敌方基础移动速度',
+  DEPLOY_LIMIT0: '关卡基础可部署人数',
   DEF0: '敌方基础防御力',
   RES0: '敌方基础法术抗性',
   HP0: '敌方基础最大生命',
@@ -41,6 +51,10 @@ const INPUT_LABELS: Record<FormulaInputId, string> = {
   PHYSICAL_MIN_DAMAGE_RATIO: '物理最低伤害比例',
   MAGICAL_MIN_DAMAGE_RATIO: '法术最低伤害比例',
   RAW_ELEMENTAL_DAMAGE: '结算前元素伤害',
+  RAW_ELEMENTAL_IMPAIRMENT: '结算前元素损伤',
+  RAW_INCOMING_DAMAGE: '减伤前承受伤害',
+  ENEMY_EP_RESISTANCE0: '敌方基础元素损伤抗性',
+  ENEMY_EP_DAMAGE_RESISTANCE0: '敌方基础元素伤害抗性',
   BASE_ATTACK_INTERVAL: '基础攻击间隔',
 };
 
@@ -58,6 +72,7 @@ const UNIT_LABELS: Record<FormulaZoneDefinition['unit'], string> = {
   ratio: '倍率增量',
   percent: '百分数点',
   damage: '已结算伤害',
+  'sp-per-second': '技力/秒',
 };
 
 /** 用自然语言变量展示乘区内部如何聚合。 */
@@ -65,6 +80,9 @@ export function renderReadableZoneAggregation(zone: FormulaZoneDefinition): stri
   if (zone.aggregation.kind === 'product-one-plus') {
     return '(1 + 来源一) × (1 + 来源二) × …';
   }
+  if (zone.aggregation.kind === 'product') return '来源一 × 来源二 × …';
+  if (zone.aggregation.kind === 'union') return '1 − (1 − 来源一) × (1 − 来源二) × …';
+  if (zone.aggregation.kind === 'max') return `max(${zone.aggregation.base}, 来源一, 来源二, …)`;
   const { base, termScale } = zone.aggregation;
   if (base === 0 && termScale === 1) return '来源一 + 来源二 + …';
   if (base === 1 && termScale === 1) return '1 + 来源一 + 来源二 + …';
@@ -215,8 +233,8 @@ function FormulaExpressionView({
   expression: FormulaExpression;
   book: FormulaBookData;
   expandFormulaReferences: boolean;
-  onSelectFormula: (formulaId: DamageFormulaId) => void;
-  formulaStack: readonly DamageFormulaId[];
+  onSelectFormula: (formulaId: FormulaId) => void;
+  formulaStack: readonly FormulaId[];
   parentPrecedence?: number;
 }): ReactNode {
   if (expression.kind === 'constant') {
@@ -349,7 +367,7 @@ export function AdvancedFormula({
   formula: FormulaBookDefinition;
   book: FormulaBookData;
   expandFormulaReferences: boolean;
-  onSelectFormula: (formulaId: DamageFormulaId) => void;
+  onSelectFormula: (formulaId: FormulaId) => void;
 }) {
   return (
     <figure aria-label={`${formula.name}计算公式`} className="mt-5">

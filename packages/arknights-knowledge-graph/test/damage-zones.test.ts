@@ -125,6 +125,35 @@ describe("可更新战斗引擎语义规则", () => {
     }
   });
 
+  it("从襁褓巨龙原始模板验证敌方生命 FINAL_SCALER 乘区", () => {
+    const buff = topicData.details.rogue_6?.relics.rogue_6_start_3?.buffs?.[0];
+    expect(buff).toBeDefined();
+    if (!buff) return;
+    const parameters = parameterMap(buff.blackboard);
+    const mechanicName = String(parameters.get("key") ?? "");
+    const actions = extractMechanicActionFacts(
+      templates[mechanicName],
+      `$[${JSON.stringify(mechanicName)}]`,
+    );
+    const predictions = predictEngineZones({
+      effectKey: buff.key,
+      parameters,
+      mechanicName,
+      actions,
+      sourceKind: "relics",
+      jsonPath: '$.details.rogue_6.relics["rogue_6_start_3"].buffs[0]',
+    });
+
+    expect(predictions).toEqual([
+      expect.objectContaining({
+        ruleId: "enemy-hp-legacy-support-action",
+        zoneId: "ENEMY_HP_RELIC",
+        status: "verified",
+      }),
+    ]);
+    expect(predictions[0]?.evidencePath).toContain('$["rogue_6_start_3"]');
+  });
+
   it("对断杖-新典训使用 Action 属性语义验证法抗点数直减", () => {
     const expectation = fixture.cases.find((candidate) => candidate.itemId === "rogue_6_relic_assign_2");
     expect(expectation).toBeDefined();

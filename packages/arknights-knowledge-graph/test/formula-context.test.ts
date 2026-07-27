@@ -5,6 +5,7 @@ import {
   FORMULA_DAMAGE_ZONES,
   FormulaContext,
   evaluateDamageFormula,
+  evaluateFormula,
   explainDamageFormula,
   renderDamageFormula,
   type FormulaInputs,
@@ -22,6 +23,8 @@ function createFormulaInputs(): FormulaInputs {
     PHYSICAL_MIN_DAMAGE_RATIO: 0.05,
     MAGICAL_MIN_DAMAGE_RATIO: 0.05,
     RAW_ELEMENTAL_DAMAGE: 0,
+    // 元素伤害抗性由敌人基础属性提供，普通测试敌人按 0 处理。
+    ENEMY_EP_DAMAGE_RESISTANCE0: 0,
     BASE_ATTACK_INTERVAL: 1,
   };
 }
@@ -157,5 +160,83 @@ describe("并行实验公式上下文", () => {
     expect(() => evaluateDamageFormula("FINAL_ATK", new FormulaContext(), {})).toThrow(
       "公式缺少输入 ATK0（未应用实验乘区前的基础攻击力）",
     );
+  });
+
+  it("计算费用、阻挡、技力和闪避，并按事件筛选技力回复", () => {
+    const context = new FormulaContext()
+      .add("DEPLOY_COST_ADD", -2, "费用直减", { id: "cost-add" })
+      .add("DEPLOY_COST_MULTIPLIER", -0.5, "费用减半", { id: "cost-mul" })
+      .add("INITIAL_DP_ADD", 10, "初始费用", { id: "initial-dp" })
+      .add("BLOCK_COUNT_ADD", -2, "阻挡降低", { id: "block-add" })
+      .add("MIN_BLOCK_COUNT", 1, "最低阻挡", { id: "block-min" })
+      .add("INITIAL_SP_ADD", 12, "初始技力", { id: "initial-sp" })
+      .add("SP_COST_MULTIPLIER", 0.65, "技力消耗降低", { id: "sp-cost" })
+      .add("SP_RECOVERY_PER_SECOND_ADD", 0.35, "自然回复", { id: "sp-recovery" })
+      .add("SP_GAIN_PER_TRIGGER", 2, "攻击回复", {
+        id: "sp-on-attack",
+        triggerTypes: ["attack"],
+      })
+      .add("SP_GAIN_PER_TRIGGER", 3, "受击回复", {
+        id: "sp-on-damage",
+        triggerTypes: ["take-damage"],
+      })
+      .add("PHYSICAL_EVASION", 0.2, "物理闪避一", { id: "eva-phy-1" })
+      .add("PHYSICAL_EVASION", 0.3, "物理闪避二", { id: "eva-phy-2" });
+
+    expect(evaluateFormula("FINAL_DEPLOY_COST", context, { DEPLOY_COST0: 20 })).toBe(9);
+    expect(evaluateFormula("FINAL_INITIAL_DP", context, { INITIAL_DP0: 10 })).toBe(20);
+    expect(evaluateFormula("FINAL_BLOCK_COUNT", context, { BLOCK_COUNT0: 2 })).toBe(1);
+    expect(evaluateFormula("FINAL_INITIAL_SP", context, { INITIAL_SP0: 5 })).toBe(17);
+    expect(evaluateFormula("FINAL_SP_COST", context, { SP_COST0: 40 })).toBe(26);
+    expect(evaluateFormula("FINAL_SP_RECOVERY_PER_SECOND", context, { SP_RECOVERY_PER_SECOND0: 1 })).toBe(1.35);
+    expect(evaluateFormula("SP_GAIN_PER_TRIGGER", context, {}, { triggerType: "attack" })).toBe(2);
+    expect(evaluateFormula("SP_GAIN_PER_TRIGGER", context, {}, { triggerType: "take-damage" })).toBe(3);
+    expect(evaluateFormula("PHYSICAL_EVASION_RATE", context, {})).toBeCloseTo(0.44);
+  });
+
+  it("计算敌人属性、三种减伤方向和元素损伤", () => {
+    const context = new FormulaContext()
+      .add("OUTER_ENEMY_ATK", 0.2, "局外敌攻", { id: "enemy-atk-outer" })
+      .add("INNER_ENEMY_ATK", 1.5, "局内敌攻", { id: "enemy-atk-inner" })
+      .add("OUTER_ENEMY_DEF", 0.2, "局外敌防", { id: "enemy-def-outer" })
+      .add("INNER_ENEMY_DEF", 1.5, "局内敌防", { id: "enemy-def-inner" })
+      .add("DEF_PERCENT", 0.2, "减防比例", { id: "def-percent-new" })
+      .add("DEF_FLAT", 100, "减防点数", { id: "def-flat-new" })
+      .add("ENEMY_RES_ADD", 10, "敌人法抗", { id: "enemy-res-add" })
+      .add("RES_PERCENT", 0.2, "减抗比例", { id: "res-percent-new" })
+      .add("RES_FLAT", 5, "减抗点数", { id: "res-flat-new" })
+      .add("OUTER_ENEMY_DAMAGE_RESISTANCE", 0.2, "局外减伤一", { id: "outer-dr-1" })
+      .add("OUTER_ENEMY_DAMAGE_RESISTANCE", 0.3, "局外减伤二", { id: "outer-dr-2" })
+      .add("INNER_ENEMY_DAMAGE_RESISTANCE", 0.4, "局内减伤一", { id: "inner-dr-1" })
+      .add("INNER_ENEMY_DAMAGE_RESISTANCE", 0.5, "局内减伤二", { id: "inner-dr-2" })
+      .add("CHAR_DAMAGE_RESISTANCE", 0.2, "我方减伤一", { id: "char-dr-1" })
+      .add("CHAR_DAMAGE_RESISTANCE", 0.3, "我方减伤二", { id: "char-dr-2" })
+      .add("CHAR_DAMAGE_RESISTANCE", 0.5, "仅元素类型减伤", {
+        id: "char-dr-elemental",
+        damageTypes: ["elemental"],
+      })
+      .add("ENEMY_OUTGOING_DAMAGE_REDUCTION", 0.3, "敌人输出降低", { id: "enemy-output-down" })
+      .add("ELEMENTAL_IMPAIRMENT_AMPLIFICATION", 0.75, "元素损伤放大", { id: "ep-amp" })
+      .add("CHAR_EP_DAMAGE_RESISTANCE", 0.5, "元素损伤减免", { id: "char-ep-res" });
+
+    expect(evaluateFormula("FINAL_ENEMY_ATK", context, { ENEMY_ATK0: 1000 })).toBe(1800);
+    expect(evaluateFormula("EFFECTIVE_DEF", context, { DEF0: 1000 })).toBe(1340);
+    expect(evaluateFormula("EFFECTIVE_RES", context, { RES0: 50 })).toBe(43);
+    // 局外取 30%，局内并集为 70%，两区剩余倍率为 0.7 × 0.3。
+    expect(evaluateFormula("FINAL_ENEMY_DAMAGE_RESISTANCE", context, {})).toBeCloseTo(0.79);
+    expect(evaluateFormula(
+      "CHAR_TAKEN_DAMAGE",
+      context,
+      { RAW_INCOMING_DAMAGE: 1000 },
+      { damageType: "physical" },
+    )).toBeCloseTo(560);
+    expect(evaluateFormula("ENEMY_OUTGOING_DAMAGE", context, { RAW_INCOMING_DAMAGE: 1000 })).toBe(700);
+    expect(evaluateFormula("ELEMENTAL_IMPAIRMENT_TO_ENEMY", context, {
+      RAW_ELEMENTAL_IMPAIRMENT: 100,
+      ENEMY_EP_RESISTANCE0: 0.2,
+    })).toBeCloseTo(140);
+    expect(evaluateFormula("ELEMENTAL_IMPAIRMENT_TO_CHAR", context, {
+      RAW_ELEMENTAL_IMPAIRMENT: 100,
+    })).toBe(50);
   });
 });

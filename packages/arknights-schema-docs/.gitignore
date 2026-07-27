@@ -15,6 +15,8 @@
 /content/docs/formula-book.mdx
 /public/data/formula-book.json
 /public/data/wrapped-relics
+/public/data/relics
+/public/data/roguelike
 /generated
 
 # 由 scripts/generate-docs.ts 从 TypeScript/JSDoc 与 graph:export 组装
@@ -28,6 +30,8 @@
 /public/data/operators
 /public/data/enemies
 /public/data/wrapped-relics
+/public/data/relics
+/public/data/roguelike
 
 # test & build
 /coverage
