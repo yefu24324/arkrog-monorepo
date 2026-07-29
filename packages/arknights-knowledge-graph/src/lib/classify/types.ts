@@ -1,3 +1,6 @@
+import type { EvidenceStatus } from "../types.js";
+import type { FormulaWritableZoneId } from "../formula/formula-book.js";
+
 /** GameData 中导出器使用的最小黑板结构。 */
 export interface BlackboardValue {
   /** 黑板参数名。 */
@@ -46,18 +49,14 @@ export interface RelicItem {
   type: string;
 }
 
-/** JSON 中单个乘区预测的稳定结构。 */
+/** JSON 中单个攻击力乘区预测的稳定结构。 */
 export interface ExportedZonePrediction {
-  /** 乘区 ID。 */
-  id: string;
-  /** 公式符号。 */
-  symbol: string;
-  /** 乘区中文名。 */
-  name: string;
-  /** 公式位置。 */
-  formula: string;
+  /** FormulaBook 中允许业务写入的真实 zone。 */
+  zoneId: FormulaWritableZoneId;
   /** verified 或 inferred。 */
-  status: string;
+  status: EvidenceStatus;
+  /** 规则置信度。 */
+  confidence: number;
   /** 判定原因。 */
   reason: string;
   /** 命中的语义规则 ID。 */
@@ -94,7 +93,7 @@ export interface ExportedRelicEffect {
   /** predicted、unknown 或 not_applicable。 */
   classification: "predicted" | "unknown" | "not_applicable";
   /** 当前效果命中的证据等级。 */
-  evidenceStatuses: string[];
+  evidenceStatuses: EvidenceStatus[];
   /** 一个效果可以同时影响多个乘区。 */
   predictions: ExportedZonePrediction[];
   /** 未得到乘区时的明确原因。 */
@@ -119,8 +118,8 @@ export interface ExportedRelic {
   description: string | null;
   /** 机器可见生效条件去重集合。 */
   conditions: string[];
-  /** 当前藏品涉及的去重乘区。 */
-  zones: Array<{ id: string; symbol: string; name: string }>;
+  /** 当前藏品涉及的去重 FormulaBook zone。 */
+  zones: FormulaWritableZoneId[];
   /** 当前藏品的 buff 数量。 */
   effectCount: number;
   /** 当前藏品的全部 buff 预测。 */
@@ -130,7 +129,7 @@ export interface ExportedRelic {
 /** 主题藏品乘区 JSON 的顶层格式。 */
 export interface RelicZoneExport {
   /** 导出格式版本，字段结构变化时递增。 */
-  schemaVersion: 1;
+  schemaVersion: 2;
   /** ISO 8601 生成时间。 */
   generatedAt: string;
   /** 集成战略主题。 */

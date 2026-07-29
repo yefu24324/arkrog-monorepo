@@ -48,7 +48,7 @@ export function buildRelicZoneTable(input: BuildRelicZoneTableInput): RelicZoneE
   });
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: input.generatedAt ?? new Date().toISOString(),
     topic: { id: input.topicId, name: input.topicName },
     sources: [

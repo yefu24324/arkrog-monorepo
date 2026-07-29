@@ -56,15 +56,11 @@ export function classifyRelicItem(input: ClassifyRelicItemInput): ExportedRelic 
 
   const effects = [...directBuffs, ...characterBuffs];
   const itemConditions = new Set<string>();
-  const itemZones = new Map<string, { id: string; symbol: string; name: string }>();
+  const itemZones = new Set<ExportedRelic["zones"][number]>();
   for (const effect of effects) {
     itemConditions.add(effect.condition);
     for (const prediction of effect.predictions) {
-      itemZones.set(prediction.id, {
-        id: prediction.id,
-        symbol: prediction.symbol,
-        name: prediction.name,
-      });
+      itemZones.add(prediction.zoneId);
     }
   }
 
@@ -76,7 +72,7 @@ export function classifyRelicItem(input: ClassifyRelicItemInput): ExportedRelic 
     usage: item.usage,
     description: item.description,
     conditions: [...itemConditions],
-    zones: [...itemZones.values()],
+    zones: [...itemZones],
     effectCount: effects.length,
     effects,
   };

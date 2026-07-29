@@ -1,4 +1,3 @@
-import { DAMAGE_ZONES } from "../domain/damage-zones.js";
 import { predictEngineZones } from "../domain/engine-rules.js";
 import { resolveMechanicName, type MechanicIndex } from "./mechanic-index.js";
 import type { BlackboardValue, ExportedRelicEffect, ExportedZonePrediction } from "./types.js";
@@ -119,15 +118,11 @@ export function classifyRelicEffect(input: ClassifyRelicEffectInput): ExportedRe
     jsonPath: input.jsonPath,
   });
 
-  const zoneById = new Map(DAMAGE_ZONES.map((zone) => [zone.id, zone]));
   const predictions: ExportedZonePrediction[] = predictionsRaw.map((prediction) => {
-    const zone = zoneById.get(prediction.zoneId);
     return {
-      id: prediction.zoneId,
-      symbol: zone?.symbol ?? prediction.zoneId,
-      name: zone?.name ?? prediction.zoneId,
-      formula: zone?.formula ?? "",
+      zoneId: prediction.zoneId,
       status: prediction.status,
+      confidence: prediction.confidence,
       reason: prediction.reason,
       ruleId: prediction.ruleId,
       evidencePaths: prediction.evidencePath.split(" | ").filter(Boolean),

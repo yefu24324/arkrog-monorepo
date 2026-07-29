@@ -31,6 +31,7 @@ export function buildMechanicIndex(
 export function resolveMechanicName(
   blackboard: ReadonlyArray<{ key: string; value: number; valueStr: string | null }>,
 ): string {
-  const entry = blackboard.find((parameter) => parameter.key === "key");
+  // GameData 少量键名带尾随空格，路由边界统一规范化后再识别模板引用。
+  const entry = blackboard.find((parameter) => parameter.key.trim() === "key");
   return entry?.valueStr ?? "";
 }

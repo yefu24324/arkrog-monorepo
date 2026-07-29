@@ -1,7 +1,8 @@
 /** 人工维护的肉鸽主题规则 → FormulaContext 的统一分派入口。 */
 
-import type { FormulaZoneId } from "../domain/damage-zones.js";
-import type { FormulaContext, FormulaContribution } from "./context.js";
+import type { FormulaZoneId } from "../formula/formula-book.js";
+import type { FormulaContext } from "../formula/context.js";
+import type { FormulaItemPlacement } from "./relic-items.js";
 import {
   applyRogue6ManualTopicRulesToFormulaContext,
   getRogue6ManualTopicDifficultyEffects,
@@ -53,7 +54,7 @@ export function getManualTopicDifficultyEffects(
 export function applyManualTopicRulesToFormulaContext(
   context: FormulaContext,
   input: ManualTopicDifficultyInput,
-): FormulaContribution[] {
+): FormulaItemPlacement[] {
   // 人工主题程序与 Kuzu 同源难度规则分开执行，防止被误认为游戏数据事实。
   return applyRogue6ManualTopicRulesToFormulaContext(context, input);
 }

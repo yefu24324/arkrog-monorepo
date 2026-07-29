@@ -1,6 +1,8 @@
 /** 沉沦者的黑流树海低难度人工维护规则。 */
 
-import type { FormulaContext, FormulaContribution } from "../context.js";
+import { FormulaZoneId } from "../../formula/formula-book.js";
+import { FormulaItem, type FormulaContext } from "../../formula/context.js";
+import type { FormulaItemPlacement } from "../relic-items.js";
 import type {
   ManualTopicDifficultyEffect,
   ManualTopicDifficultyInput,
@@ -22,7 +24,7 @@ const ROGUE_6_LOW_DIFFICULTY_VALUES: Readonly<
 
 /** 人工维护规则的稳定源码证据位置。 */
 const MANUAL_EVIDENCE_PATH =
-  "packages/arknights-knowledge-graph/src/lib/formula/topic-rules/rogue-6.ts";
+  "packages/arknights-knowledge-graph/src/lib/mechanics/topic-rules/rogue-6.ts";
 
 /** 取得黑流树海当前精确难度的人工效果。 */
 export function getRogue6ManualTopicDifficultyEffects(
@@ -43,7 +45,7 @@ export function getRogue6ManualTopicDifficultyEffects(
     {
       ruleId: `manual-topic-rogue-6-grade-${grade}-enemy-max-hp`,
       grade,
-      zoneId: "OUTER_ENEMY_MAX_HP",
+      zoneId: FormulaZoneId.藏品局外敌人最大生命倍率,
       value: values.enemyMaxHp,
       description: `所有敌人最大生命值${values.enemyMaxHp * 100}%（仅限该难度）`,
       maintenance: "manual",
@@ -52,7 +54,7 @@ export function getRogue6ManualTopicDifficultyEffects(
     {
       ruleId: `manual-topic-rogue-6-grade-${grade}-enemy-atk`,
       grade,
-      zoneId: "OUTER_ENEMY_ATK",
+      zoneId: FormulaZoneId.藏品局外敌人攻击力倍率,
       value: values.enemyAtk,
       description: `所有敌人攻击力${values.enemyAtk * 100}%（仅限该难度）`,
       maintenance: "manual",
@@ -65,25 +67,22 @@ export function getRogue6ManualTopicDifficultyEffects(
 export function applyRogue6ManualTopicRulesToFormulaContext(
   context: FormulaContext,
   input: ManualTopicDifficultyInput,
-): FormulaContribution[] {
+): FormulaItemPlacement[] {
   const effects = getRogue6ManualTopicDifficultyEffects(input);
-  return effects.map((effect) => {
-    const contribution: FormulaContribution = {
-      id: `manual-topic:${input.topicId}:NORMAL:${effect.grade}:${effect.ruleId}`,
+  return effects.flatMap((effect) => {
+    const placement: FormulaItemPlacement = {
       zoneId: effect.zoneId,
-      value: effect.value,
-      tooltip: `黑流树海人工规则 · 难度 ${effect.grade}`,
-      reason: `${effect.description}。该规则由人工维护，不属于 GameData 或 Kuzu 图谱事实。`,
-      active: true,
-      source: {
-        kind: "manual",
-        itemId: `${input.topicId}:NORMAL:${effect.grade}`,
+      item: new FormulaItem(effect.value, `黑流树海人工规则 · 难度 ${effect.grade}`),
+      route: {
+        parameterKey: "manual",
         ruleId: effect.ruleId,
+        reason: `${effect.description}。该规则由人工维护，不属于 GameData 或 Kuzu 图谱事实。`,
         evidencePath: effect.evidencePath,
-        evidencePaths: [effect.evidencePath],
       },
     };
-    context.addContribution(contribution);
-    return contribution;
+    // 人工规则的目标不在 BuffContext 时保留效果定义，但不写入公式上下文。
+    if (!context.book.hasZone(placement.zoneId)) return [];
+    context.addItem(placement.zoneId, placement.item);
+    return [placement];
   });
 }

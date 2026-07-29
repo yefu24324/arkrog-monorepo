@@ -1,466 +1,218 @@
-/**
- * 藏品乘区与生效条件交互表：支持搜索、乘区多选过滤，以及行展开查看 buffs 原数据。
- * 数据按主题从 /data/relic-zones/{topicId}.json 拉取，避免 RSC 序列化超大 JSON 触发水合问题。
- */
+/** 当前攻击力版本的藏品路由、筛选和 FormulaBook 预览表。 */
 
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Search, X } from 'lucide-react';
 import type {
-  ExportedRoguelikeTopicArtifact,
-  OriginalRogueCustomizedDifficultyData,
-  OriginalRogueDifficultyData,
   WrappedRelicItem,
   WrappedRelicTopicArtifact,
 } from '@arkrog/arknights-schema/game-data';
+import type { FormulaWritableZoneId } from '@arkrog/arknights-knowledge-graph/formula';
 import {
-  FORMULA_ZONES,
-  getManualTopicDifficultyEffects,
-  routeRogueDifficultyToZones,
-  routeSelectedRogueDifficultyToZones,
-} from '@arkrog/arknights-knowledge-graph/formula';
-import { CombatPreviewPanel } from '@/components/combat-preview-panel';
-import { cn } from '@/lib/cn';
+  routeRelicBuffToZones,
+  type RelicBuffZoneRoute,
+} from '@arkrog/arknights-knowledge-graph/mechanics';
+import { CombatPreviewPanel } from './combat-preview-panel';
+import { cn } from '../lib/cn';
+import {
+  collectFormulaZoneComments,
+  loadFormulaBookPage,
+} from '../lib/formula-book-runtime';
 
-/** 导出 JSON 中的乘区摘要。 */
-export interface RelicZoneRef {
-  id: string;
-  symbol: string;
-  name: string;
-}
+/** 无攻击力 zone 的筛选占位 ID。 */
+const ZONE_FILTER_NONE = '__none__';
 
-/** 导出 JSON 中的乘区预测。 */
-export interface RelicZonePrediction {
-  id: string;
-  symbol: string;
-  name: string;
-  formula?: string;
-  status?: string;
-  reason: string;
-  ruleId: string;
-  evidencePaths?: string[];
-}
-
-/** 导出 JSON 中单条 buff / effect。 */
-export interface RelicZoneEffect {
-  effectId: string;
-  source: string;
+/** 单条原始 buff 的当前攻击力路由结果。 */
+interface RoutedRelicEffect {
   buffIndex: number;
-  key: string;
-  blackboard: Array<{
-    key: string;
-    value: number;
-    valueStr: string | null;
-  }>;
-  parameters: string;
-  mechanic: {
-    name: string;
-    events: string[];
-    componentTypes: string[];
-  };
-  condition: string;
-  classification: string;
-  evidenceStatuses: string[];
-  predictions: RelicZonePrediction[];
-  unclassifiedReason: string | null;
-  jsonPath: string;
+  route: RelicBuffZoneRoute;
+  source: string;
 }
 
-/** 导出 JSON 中的一件藏品。 */
-export interface RelicZoneItem {
-  id: string;
-  name: string;
-  rarity: string;
-  sortId: number;
-  usage: string | null;
-  description: string | null;
-  conditions: string[];
-  zones: RelicZoneRef[];
-  effectCount: number;
-  effects: RelicZoneEffect[];
+/** 一件包装藏品及其现场路由得到的攻击力分析。 */
+interface RoutedRelicItem {
+  effects: RoutedRelicEffect[];
+  item: WrappedRelicItem;
+  zones: FormulaWritableZoneId[];
 }
 
-/** 传给表格的精简数据集。 */
-export interface RelicZoneTableData {
-  topic: { id: string; name: string };
-  items: RelicZoneItem[];
-}
-
+/** 组件只需要主题 ID。 */
 interface RelicZoneTableProps {
-  /** 集成战略主题 ID，例如 rogue_6。 */
   topicId: string;
   className?: string;
 }
 
-/** UI 中稳定标识一个主题难度。 */
-function difficultyKey(difficulty: OriginalRogueDifficultyData): string {
-  return `${difficulty.modeDifficulty}:${difficulty.grade}`;
+/** 主题异步加载状态，topicId 用于屏蔽切换主题时的旧结果。 */
+interface TopicLoadState {
+  topicId: string;
+  status: 'loading' | 'ready' | 'error';
+  error: string | null;
 }
 
-/** 按模式和等级关联主题机制难度扩展。 */
-function findCustomizedDifficulty(
-  topic: ExportedRoguelikeTopicArtifact,
-  difficulty: OriginalRogueDifficultyData,
-): OriginalRogueCustomizedDifficultyData | undefined {
-  return topic.customizedDifficulties.find(
-    (candidate) =>
-      candidate.modeDifficulty === difficulty.modeDifficulty &&
-      candidate.grade === difficulty.grade,
-  );
+/** 对一件包装藏品的直接 buff 和 charBuffData 现场执行攻击力路由。 */
+function routeWrappedRelic(item: WrappedRelicItem, topicId: string): RoutedRelicItem {
+  const effects: RoutedRelicEffect[] = [];
+  item.relic.buffs.forEach((buff, buffIndex) => {
+    effects.push({
+      source: 'relics',
+      buffIndex,
+      route: routeRelicBuffToZones({
+        effectId: `effect:${topicId}:${item.id}:${buffIndex}`,
+        source: 'relics',
+        buffIndex,
+        key: buff.key,
+        blackboard: buff.blackboard,
+        jsonPath: `$.details.${topicId}.relics[${JSON.stringify(item.id)}].buffs[${buffIndex}]`,
+      }),
+    });
+  });
+  for (const characterBuff of item.charBuffs) {
+    (characterBuff.buffs ?? []).forEach((buff, buffIndex) => {
+      effects.push({
+        source: `charBuffData:${characterBuff.id}`,
+        buffIndex,
+        route: routeRelicBuffToZones({
+          effectId: `effect:${topicId}:charBuffData:${characterBuff.id}:${buffIndex}`,
+          source: `charBuffData:${characterBuff.id}`,
+          buffIndex,
+          key: buff.key,
+          blackboard: buff.blackboard,
+          jsonPath: `$.details.${topicId}.charBuffData[${JSON.stringify(characterBuff.id)}].buffs[${buffIndex}]`,
+        }),
+      });
+    });
+  }
+  return {
+    item,
+    effects,
+    zones: [...new Set(effects.flatMap((effect) => effect.route.zoneIds))],
+  };
 }
 
-/** 把 formula 稳定乘区 ID 转换为藏品表格共用的徽章结构。 */
-function formulaZoneRefs(zoneIds: readonly string[]): RelicZoneRef[] {
-  const selected = new Set(zoneIds);
-  return Object.values(FORMULA_ZONES)
-    .filter((zone) => selected.has(zone.id))
-    .map((zone) => ({
-      id: zone.id,
-      symbol: zone.symbol,
-      name: zone.name,
-    }));
+/** 将黑板压缩为便于浏览和搜索的文本。 */
+function summarizeBlackboard(effect: RoutedRelicEffect): string {
+  return effect.route.effect.blackboard
+    .map((entry) => `${entry.key}=${entry.valueStr ?? entry.value}`)
+    .join(', ');
 }
 
-/** 从全部藏品中收集可选乘区，按 symbol 稳定排序。 */
-function collectZones(items: RelicZoneItem[]): RelicZoneRef[] {
-  const map = new Map<string, RelicZoneRef>();
-  for (const item of items) {
-    for (const zone of item.zones) {
-      if (!map.has(zone.id)) map.set(zone.id, zone);
+/** 判断藏品是否命中名称、ID、原文、黑板或乘区搜索。 */
+function matchesSearch(entry: RoutedRelicItem, query: string): boolean {
+  if (!query) return true;
+  const text = [
+    entry.item.id,
+    entry.item.name,
+    entry.item.relic.usage,
+    ...entry.zones,
+    ...entry.effects.flatMap((effect) => [
+      effect.route.effect.key,
+      summarizeBlackboard(effect),
+    ]),
+  ].join(' ').toLowerCase();
+  return text.includes(query);
+}
+
+/** 判断藏品是否满足全部已选 zone 筛选。 */
+function matchesZones(entry: RoutedRelicItem, selected: ReadonlySet<string>): boolean {
+  if (selected.size === 0) return true;
+  for (const zoneId of selected) {
+    if (zoneId === ZONE_FILTER_NONE) {
+      if (entry.zones.length > 0) return false;
+    } else if (!entry.zones.includes(zoneId as FormulaWritableZoneId)) {
+      return false;
     }
   }
-  return [...map.values()].sort((left, right) =>
-    left.symbol.localeCompare(right.symbol),
-  );
+  return true;
 }
 
-/** 是否命中搜索词（藏品名 / 原文 / 描述 / id）。 */
-function matchesSearch(item: RelicZoneItem, query: string): boolean {
-  if (!query) return true;
-  const haystack = [
-    item.name,
-    item.id,
-    item.usage ?? '',
-    item.description ?? '',
-    ...item.zones.map((zone) => `${zone.symbol} ${zone.name}`),
-  ]
-    .join('\n')
-    .toLowerCase();
-  return haystack.includes(query);
-}
-
-/** 乘区过滤哨兵：表示「无加成乘区」的藏品。 */
-const ZONE_FILTER_NONE = '__NONE__';
-
-/** 是否命中已选乘区（多选为 OR：命中任一即可；含「无乘区」）。 */
-function matchesZones(item: RelicZoneItem, selected: ReadonlySet<string>): boolean {
-  if (selected.size === 0) return true;
-  if (selected.has(ZONE_FILTER_NONE) && item.zones.length === 0) return true;
-  return item.zones.some((zone) => selected.has(zone.id));
-}
-
-/** 乘区徽章列表。 */
-function ZoneBadges({ zones }: { zones: RelicZoneRef[] }) {
+/** 使用 FormulaZoneId 注释显示一个或多个攻击力 zone。 */
+function ZoneBadges({
+  zones,
+  comments,
+}: {
+  zones: readonly FormulaWritableZoneId[];
+  comments: Readonly<Record<string, string>>;
+}) {
   if (zones.length === 0) {
-    return <span className="text-fd-muted-foreground">—</span>;
+    return <span className="text-xs text-fd-muted-foreground">—</span>;
   }
   return (
     <div className="flex flex-wrap gap-1.5">
-      {zones.map((zone) => (
+      {zones.map((zoneId) => (
         <span
-          key={zone.id}
-          className="inline-flex items-center gap-1 rounded-md border bg-fd-muted/50 px-1.5 py-0.5 text-xs"
-          title={`${zone.name}（${zone.id}）`}
+          key={zoneId}
+          className="inline-flex flex-col rounded-lg border border-fd-primary/25 bg-fd-primary/5 px-2 py-1"
         >
-          <span className="font-mono font-medium text-fd-primary">{zone.symbol}</span>
-          <span className="text-fd-muted-foreground">{zone.name}</span>
+          <span className="text-xs font-medium text-fd-primary">{comments[zoneId] ?? zoneId}</span>
+          <code className="text-[0.6rem] text-fd-muted-foreground">{zoneId}</code>
         </span>
       ))}
     </div>
   );
 }
 
-/** 展开区：逐条展示 buff / effect 原数据。 */
-function EffectDetails({ effects }: { effects: RelicZoneEffect[] }) {
-  if (effects.length === 0) {
-    return (
-      <p className="text-sm text-fd-muted-foreground">该藏品没有导出的 buffs。</p>
-    );
-  }
+/** 分类状态中文标签。 */
+function classificationLabel(route: RelicBuffZoneRoute): string {
+  if (route.classification === 'predicted') return '已路由';
+  if (route.classification === 'unknown') return '未知';
+  return '不适用';
+}
 
+/** 展示单件藏品的全部原始 buff 与规则证据。 */
+function EffectDetails({
+  effects,
+  comments,
+}: {
+  effects: readonly RoutedRelicEffect[];
+  comments: Readonly<Record<string, string>>;
+}) {
+  if (effects.length === 0) {
+    return <p className="text-xs text-fd-muted-foreground">该藏品没有可路由 buff。</p>;
+  }
   return (
     <div className="space-y-3">
-      {effects.map((effect) => (
-        <div
-          key={effect.effectId}
-          className="overflow-hidden rounded-xl border bg-fd-background"
-        >
-          <div className="flex flex-wrap items-center gap-2 border-b bg-fd-muted/30 px-3 py-2 text-xs">
-            <code className="font-mono text-fd-primary">{effect.key}</code>
-            <span className="text-fd-muted-foreground">#{effect.buffIndex}</span>
-            <span className="rounded border px-1.5 py-0.5">{effect.classification}</span>
-            <span className="text-fd-muted-foreground">{effect.source}</span>
-          </div>
-          <div className="grid gap-3 p-3 text-sm md:grid-cols-2">
-            <Field label="生效条件" value={effect.condition || '—'} />
-            <Field label="参数摘要" value={effect.parameters || '—'} />
-            <Field label="模板" value={effect.mechanic.name || '—'} />
-            <Field
-              label="事件"
-              value={
-                effect.mechanic.events.length > 0
-                  ? effect.mechanic.events.join(', ')
-                  : '—'
-              }
-            />
-            <Field
-              label="组件"
-              value={
-                effect.mechanic.componentTypes.length > 0
-                  ? effect.mechanic.componentTypes.join(', ')
-                  : '—'
-              }
-            />
-            <Field label="JSON Path">
-              <code className="break-all font-mono text-xs">{effect.jsonPath}</code>
-            </Field>
-            {effect.unclassifiedReason ? (
-              <Field label="未分类原因" value={effect.unclassifiedReason} />
-            ) : null}
-          </div>
-          <div className="border-t px-3 py-2">
-            <p className="mb-2 text-xs font-medium text-fd-muted-foreground">
-              blackboard
-            </p>
-            {effect.blackboard.length === 0 ? (
-              <p className="text-sm text-fd-muted-foreground">空</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[24rem] border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b text-left text-fd-muted-foreground">
-                      <th className="px-2 py-1.5 font-medium">key</th>
-                      <th className="px-2 py-1.5 font-medium">value</th>
-                      <th className="px-2 py-1.5 font-medium">valueStr</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {effect.blackboard.map((entry, index) => (
-                      <tr key={`${entry.key}-${index}`} className="border-b last:border-b-0">
-                        <td className="px-2 py-1.5 font-mono">{entry.key}</td>
-                        <td className="px-2 py-1.5 font-mono">{entry.value}</td>
-                        <td className="px-2 py-1.5 font-mono">
-                          {entry.valueStr ?? 'null'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+      {effects.map((effect) => {
+        const prediction = effect.route.predictions[0];
+        return (
+          <article
+            key={effect.route.effect.effectId}
+            className="rounded-xl border bg-fd-background p-3"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="font-mono text-xs font-semibold">{effect.route.effect.key}</p>
+                <p className="mt-1 text-[0.65rem] text-fd-muted-foreground">
+                  {effect.source} · buffs[{effect.buffIndex}]
+                </p>
               </div>
-            )}
-          </div>
-          {effect.predictions.length > 0 ? (
-            <div className="border-t px-3 py-2">
-              <p className="mb-2 text-xs font-medium text-fd-muted-foreground">
-                predictions
-              </p>
-              <pre className="overflow-x-auto rounded-lg bg-fd-muted/40 p-2 text-xs">
-                {JSON.stringify(effect.predictions, null, 2)}
-              </pre>
+              <span className="rounded-full border px-2 py-0.5 text-[0.65rem] text-fd-muted-foreground">
+                {classificationLabel(effect.route)}
+              </span>
             </div>
-          ) : null}
-          <details className="border-t">
-            <summary className="cursor-pointer px-3 py-2 text-xs text-fd-muted-foreground hover:text-fd-foreground">
-              查看完整 effect JSON
-            </summary>
-            <pre className="overflow-x-auto border-t bg-fd-muted/20 p-3 text-xs">
-              {JSON.stringify(effect, null, 2)}
-            </pre>
-          </details>
-        </div>
-      ))}
+            <p className="mt-2 break-all font-mono text-[0.7rem] leading-5 text-fd-muted-foreground">
+              {summarizeBlackboard(effect) || '无黑板参数'}
+            </p>
+            <div className="mt-2">
+              <ZoneBadges zones={effect.route.zoneIds} comments={comments} />
+            </div>
+            <p className="mt-2 text-xs leading-5 text-fd-muted-foreground">
+              {prediction?.reason ?? effect.route.unclassifiedReason}
+            </p>
+            <p className="mt-1 break-all font-mono text-[0.65rem] text-fd-muted-foreground/80">
+              {prediction?.evidencePath ?? effect.route.effect.jsonPath}
+            </p>
+          </article>
+        );
+      })}
     </div>
   );
 }
 
-/** 展开区内的标签字段。 */
-function Field({
-  label,
-  value,
-  children,
-}: {
-  label: string;
-  value?: string;
-  children?: ReactNode;
-}) {
-  return (
-    <div className="min-w-0">
-      <p className="mb-0.5 text-xs text-fd-muted-foreground">{label}</p>
-      {children ?? (
-        <p className="break-words text-sm leading-relaxed">{value}</p>
-      )}
-    </div>
-  );
-}
-
-/** 主题机制扩展使用原始字段展示，不把 development buff ID 当作战斗 buff。 */
-function customizedDifficultyText(
-  customized: OriginalRogueCustomizedDifficultyData | undefined,
-): string {
-  if (!customized) return '—';
-  const descriptions = customized.buffDesc ?? [];
-  const mechanics = Object.entries(customized)
-    .filter(
-      ([key, value]) =>
-        !['modeDifficulty', 'grade', 'buffs', 'buffDesc'].includes(key) &&
-        value !== null &&
-        value !== undefined,
-    )
-    .map(([key, value]) => `${key}: ${String(value)}`);
-  const developmentIds = customized.buffs?.length
-    ? `发展节点：${customized.buffs.join(', ')}`
-    : '';
-  return [...descriptions, ...mechanics, developmentIds].filter(Boolean).join('；') || '—';
-}
-
-/** 难度单选表：每行展示本级原始规则、主题扩展和 Kuzu 同源公式乘区。 */
-function DifficultySelectionTable({
-  topicId,
-  topic,
-  selectedKey,
-  onSelect,
-}: {
-  topicId: string;
-  topic: ExportedRoguelikeTopicArtifact;
-  selectedKey: string | null;
-  onSelect: (difficulty: OriginalRogueDifficultyData) => void;
-}) {
-  const selectedDifficulty =
-    topic.difficulties.find((difficulty) => difficultyKey(difficulty) === selectedKey) ?? null;
-  const selectedRoute = routeSelectedRogueDifficultyToZones({
-    topicId,
-    difficulties: topic.difficulties,
-    selectedDifficulty,
-  });
-  // 难度选择只展示固定难度规则，不混入失败助力或上一局遗留支援。
-  const cumulativeZones = formulaZoneRefs([
-    ...selectedRoute.effects.map((effect) => effect.zoneId),
-    // 人工主题规则由 formula 独立提供，不属于 Kuzu 同源 effects。
-    ...selectedRoute.manualTopicEffects.map((effect) => effect.zoneId),
-  ]);
-
-  return (
-    <section className="overflow-hidden rounded-2xl border bg-fd-card text-fd-card-foreground">
-      <div className="border-b p-4">
-        <h2 className="text-base font-semibold">难度选择</h2>
-        <p className="mt-1 text-sm text-fd-muted-foreground">
-          NORMAL 模式会累计此前等级；发展节点仅展示主题机制，不作为战斗 buff。
-        </p>
-        {selectedDifficulty ? (
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-            <span className="text-fd-muted-foreground">
-              当前：{selectedDifficulty.name} {selectedDifficulty.grade} · 累计公式乘区
-            </span>
-            <ZoneBadges zones={cumulativeZones} />
-          </div>
-        ) : null}
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[64rem] border-collapse text-sm">
-          <thead>
-            <tr className="border-b bg-fd-muted/40 text-left text-fd-muted-foreground">
-              <th className="w-12 px-3 py-2.5 font-medium">选择</th>
-              <th className="w-28 px-3 py-2.5 font-medium">模式</th>
-              <th className="w-20 px-3 py-2.5 font-medium">等级</th>
-              <th className="w-[30%] px-3 py-2.5 font-medium">原始难度规则</th>
-              <th className="w-[26%] px-3 py-2.5 font-medium">主题机制扩展</th>
-              <th className="px-3 py-2.5 font-medium">本级新增乘区</th>
-            </tr>
-          </thead>
-          <tbody>
-            {topic.difficulties.map((difficulty, index) => {
-              const key = difficultyKey(difficulty);
-              const customized = findCustomizedDifficulty(topic, difficulty);
-              const route = routeRogueDifficultyToZones({
-                topicId,
-                difficulty,
-                difficultyIndex: index,
-              });
-              // 黑流树海低难度规则按精确等级读取，禁止进入 NORMAL 累计规则表。
-              const manualTopicEffects = getManualTopicDifficultyEffects({
-                topicId,
-                selectedDifficulty: difficulty,
-              });
-              return (
-                <tr
-                  key={key}
-                  className={cn(
-                    'border-b align-top last:border-b-0 hover:bg-fd-accent/30',
-                    selectedKey === key && 'bg-fd-primary/5',
-                  )}
-                >
-                  <td className="px-3 py-3">
-                    <input
-                      type="radio"
-                      name={`difficulty-${topicId}`}
-                      checked={selectedKey === key}
-                      onChange={() => onSelect(difficulty)}
-                      aria-label={`选择 ${difficulty.modeDifficulty} ${difficulty.grade}`}
-                      className="size-4 accent-[var(--color-fd-primary)]"
-                    />
-                  </td>
-                  <td className="px-3 py-3 font-mono text-xs">{difficulty.modeDifficulty}</td>
-                  <td className="px-3 py-3">
-                    <span className="font-medium">{difficulty.grade}</span>
-                    <span className="mt-1 block text-xs text-fd-muted-foreground">
-                      {difficulty.name}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 leading-relaxed">
-                    <p>{difficulty.ruleDesc}</p>
-                    {manualTopicEffects.length > 0 ? (
-                      <div className="mt-1.5 rounded-lg border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-xs">
-                        <span className="font-medium text-amber-700 dark:text-amber-300">
-                          人工维护主题规则：
-                        </span>
-                        {manualTopicEffects.map((effect) => effect.description).join('；')}
-                        <span className="mt-0.5 block text-fd-muted-foreground">
-                          不属于 GameData 或 Kuzu 图谱事实，仅在该精确难度生效。
-                        </span>
-                      </div>
-                    ) : null}
-                  </td>
-                  <td className="px-3 py-3 text-xs leading-relaxed text-fd-muted-foreground">
-                    {customizedDifficultyText(customized)}
-                  </td>
-                  <td className="px-3 py-3">
-                    <ZoneBadges
-                      zones={formulaZoneRefs([
-                        ...route.zoneIds,
-                        ...manualTopicEffects.map((effect) => effect.zoneId),
-                      ])}
-                    />
-                    <p className="mt-1 text-[0.68rem] text-fd-muted-foreground">
-                      {manualTopicEffects.length > 0 ? 'manual + ' : ''}
-                      {route.classification}
-                      {route.unclassifiedReason ? ` · ${route.unclassifiedReason}` : ''}
-                    </p>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
-/** 单行藏品：多选 + 主信息行 + 可选展开的 buffs 详情行。 */
+/** 单行藏品选择、启用、层数和路由详情。 */
 function RelicRow({
-  item,
-  wrappedItem,
+  entry,
+  comments,
   expanded,
   selected,
   onToggleExpand,
@@ -468,8 +220,8 @@ function RelicRow({
   onToggleEnable,
   onLayerChange,
 }: {
-  item: RelicZoneItem;
-  wrappedItem: WrappedRelicItem;
+  entry: RoutedRelicItem;
+  comments: Readonly<Record<string, string>>;
   expanded: boolean;
   selected: boolean;
   onToggleExpand: () => void;
@@ -477,102 +229,68 @@ function RelicRow({
   onToggleEnable: () => void;
   onLayerChange: (layer: number) => void;
 }) {
+  const item = entry.item;
   return (
     <>
-      <tr
-        className={cn(
-          'border-b align-top transition-colors hover:bg-fd-accent/40',
-          expanded && 'bg-fd-accent/25',
-          selected && 'bg-fd-primary/5',
-        )}
-      >
-        <td className="px-3 py-3">
+      <tr className={cn('border-b align-top hover:bg-fd-accent/30', selected && 'bg-fd-primary/5')}>
+        <td className="select-none px-3 py-3">
           <input
             type="checkbox"
             checked={selected}
             onChange={onToggleSelect}
             aria-label={`选择藏品 ${item.name}`}
-            className="size-4 accent-[var(--color-fd-primary)]"
+            className="size-4 select-none accent-[var(--color-fd-primary)]"
           />
         </td>
-        <td className="px-3 py-3">
+        <td className="select-none px-3 py-3">
           <input
             type="checkbox"
-            checked={wrappedItem.enable}
+            checked={item.enable}
             disabled={!selected}
             onChange={onToggleEnable}
             aria-label={`启用藏品 ${item.name}`}
-            className="size-4 accent-[var(--color-fd-primary)] disabled:opacity-40"
+            className="size-4 select-none accent-[var(--color-fd-primary)] disabled:opacity-40"
           />
         </td>
-        <td className="px-3 py-3">
+        <td className="select-none px-3 py-3">
           <input
             type="number"
             min={0}
             step={1}
-            value={wrappedItem.layer}
+            value={item.layer}
             disabled={!selected}
-            onChange={(event) => onLayerChange(Math.max(0, Math.trunc(Number(event.target.value) || 0)))}
+            onChange={(event) => onLayerChange(
+              Math.max(0, Math.trunc(Number(event.target.value) || 0)),
+            )}
             aria-label={`${item.name} 生效层数`}
-            className="w-16 rounded-md border bg-fd-background px-2 py-1 font-mono text-xs disabled:opacity-40"
+            className="w-16 select-none rounded-md border bg-fd-background px-2 py-1 font-mono text-xs disabled:opacity-40"
           />
         </td>
-        <td className="px-3 py-3">
+        <td className="select-none px-3 py-3">
           <button
             type="button"
             aria-expanded={expanded}
-            aria-label={expanded ? `收起 ${item.name}` : `展开 ${item.name}`}
             onClick={onToggleExpand}
-            className="rounded p-1 text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-foreground"
+            className="select-none rounded p-1 text-fd-muted-foreground hover:bg-fd-accent"
           >
-            <ChevronDown
-              className={cn(
-                'size-4 transition-transform',
-                expanded && 'rotate-180',
-              )}
-            />
+            <ChevronDown className={cn('size-4 transition-transform', expanded && 'rotate-180')} />
           </button>
         </td>
-        <td className="px-3 py-3">
-          <button
-            type="button"
-            onClick={onToggleExpand}
-            className="w-full text-left"
-          >
+        <td className="cursor-text px-3 py-3">
+          <div className="w-full select-text text-left">
             <span className="font-medium">{item.name}</span>
-            <span className="mt-1 block font-mono text-[0.7rem] text-fd-muted-foreground">
-              {item.id}
-            </span>
-          </button>
+            <code className="mt-1 block text-[0.65rem] text-fd-muted-foreground">{item.id}</code>
+          </div>
         </td>
+        <td className="px-3 py-3 text-fd-muted-foreground">{item.relic.usage || '—'}</td>
         <td className="px-3 py-3">
-          <button
-            type="button"
-            onClick={onToggleExpand}
-            className="w-full text-left leading-relaxed text-fd-muted-foreground"
-          >
-            {item.usage ?? '—'}
-          </button>
-        </td>
-        <td className="px-3 py-3">
-          <button type="button" onClick={onToggleExpand} className="w-full text-left">
-            <ZoneBadges zones={item.zones} />
-          </button>
+          <ZoneBadges zones={entry.zones} comments={comments} />
         </td>
       </tr>
       {expanded ? (
-        <tr className="border-b last:border-b-0 bg-fd-muted/15">
+        <tr className="border-b bg-fd-muted/10">
           <td colSpan={7} className="px-4 py-4">
-            <div className="mb-3 flex flex-wrap gap-3 text-xs text-fd-muted-foreground">
-              <span>稀有度：{item.rarity}</span>
-              <span>buff 数：{item.effectCount}</span>
-              {item.description ? (
-                <span className="basis-full text-[0.8125rem] leading-relaxed">
-                  背景：{item.description}
-                </span>
-              ) : null}
-            </div>
-            <EffectDetails effects={item.effects} />
+            <EffectDetails effects={entry.effects} comments={comments} />
           </td>
         </tr>
       ) : null}
@@ -580,235 +298,148 @@ function RelicRow({
   );
 }
 
-/** 藏品乘区高级表格。 */
+/** 攻击力藏品乘区表。 */
 export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
-  const [data, setData] = useState<RelicZoneTableData | null>(null);
-  /** relics:export 的主题与完整难度原始数据。 */
-  const [topicArtifact, setTopicArtifact] =
-    useState<ExportedRoguelikeTopicArtifact | null>(null);
-  /** 用户在难度表中的单选项。 */
-  const [selectedDifficultyKey, setSelectedDifficultyKey] = useState<string | null>(null);
-  /** 原始包装藏品是公式输入；乘区 JSON 只负责表格展示。 */
   const [wrappedRelics, setWrappedRelics] = useState<WrappedRelicItem[]>([]);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [topicName, setTopicName] = useState(topicId);
+  const [zoneComments, setZoneComments] = useState<Readonly<Record<string, string>>>({});
+  const [loadState, setLoadState] = useState<TopicLoadState>({
+    topicId,
+    status: 'loading',
+    error: null,
+  });
   const [query, setQuery] = useState('');
   const [selectedZoneIds, setSelectedZoneIds] = useState<string[]>([]);
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
-  /** 参与公式求值的多选藏品 ID。 */
   const [selectedRelicIds, setSelectedRelicIds] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
-
-    // 按主题拉取静态 JSON；切换主题时取消上一次请求结果。
     void Promise.all([
-      fetch(`/data/relic-zones/${topicId}.json`),
-      fetch(`/data/relics/${topicId}.json`),
-      fetch(`/data/roguelike/topics/${topicId}.json`),
-    ])
-      .then(async ([zoneResponse, wrappedResponse, topicResponse]) => {
-        if (!zoneResponse.ok || !wrappedResponse.ok || !topicResponse.ok) {
-          throw new Error(
-            `HTTP zones=${zoneResponse.status}, wrapped=${wrappedResponse.status}, topic=${topicResponse.status}`,
-          );
-        }
-        return Promise.all([
-          zoneResponse.json() as Promise<RelicZoneTableData>,
-          wrappedResponse.json() as Promise<WrappedRelicTopicArtifact>,
-          topicResponse.json() as Promise<ExportedRoguelikeTopicArtifact>,
-        ]);
-      })
-      .then(([payload, wrappedPayload, topicPayload]) => {
-        if (cancelled) return;
-        const wrappedIds = new Set(wrappedPayload.items.map((item) => item.id));
-        const missing = (payload.items ?? []).find((item) => !wrappedIds.has(item.id));
-        if (missing) throw new Error(`包装藏品缺少 ${missing.id}`);
-        // 请求成功后再清理旧错误，避免 effect 内同步 setState 触发级联渲染。
-        setLoadError(null);
-        setData({
-          topic: payload.topic,
-          items: payload.items ?? [],
-        });
-        setWrappedRelics(wrappedPayload.items ?? []);
-        setTopicArtifact(topicPayload);
-        // 默认选择 NORMAL 0；旧主题缺少时回退到第一条原始难度。
-        const defaultDifficulty =
-          topicPayload.difficulties.find(
-            (difficulty) =>
-              difficulty.modeDifficulty === 'NORMAL' && difficulty.grade === 0,
-          ) ?? topicPayload.difficulties[0];
-        setSelectedDifficultyKey(defaultDifficulty ? difficultyKey(defaultDifficulty) : null);
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return;
-        const message = error instanceof Error ? error.message : String(error);
-        setLoadError(message);
+      fetch(`/data/relics/${topicId}.json`).then(async (response) => {
+        if (!response.ok) throw new Error(`relics HTTP ${response.status}`);
+        return (await response.json()) as WrappedRelicTopicArtifact;
+      }),
+      loadFormulaBookPage(),
+    ]).then(([artifact, formulaData]) => {
+      if (cancelled) return;
+      setWrappedRelics(artifact.items ?? []);
+      setTopicName(artifact.topic.name);
+      setZoneComments(collectFormulaZoneComments(formulaData));
+      setSelectedZoneIds([]);
+      setExpandedIds([]);
+      setSelectedRelicIds([]);
+      setLoadState({ topicId, status: 'ready', error: null });
+    }).catch((error: unknown) => {
+      if (cancelled) return;
+      setLoadState({
+        topicId,
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error),
       });
-
+    });
     return () => {
       cancelled = true;
     };
   }, [topicId]);
 
-  const selectedZones = useMemo(
-    () => new Set(selectedZoneIds),
-    [selectedZoneIds],
+  // topicId 不一致表示新主题仍在加载，不能短暂展示上一主题的数据。
+  const loading = loadState.topicId !== topicId || loadState.status === 'loading';
+  const loadError = loadState.topicId === topicId && loadState.status === 'error'
+    ? loadState.error
+    : null;
+
+  const routedItems = useMemo(
+    () => wrappedRelics.map((item) => routeWrappedRelic(item, topicId)),
+    [topicId, wrappedRelics],
   );
+  const availableZones = useMemo(
+    () => [...new Set(routedItems.flatMap((entry) => entry.zones))],
+    [routedItems],
+  );
+  const selectedZones = useMemo(() => new Set(selectedZoneIds), [selectedZoneIds]);
   const expandedIdSet = useMemo(() => new Set(expandedIds), [expandedIds]);
-  const selectedRelicIdSet = useMemo(
-    () => new Set(selectedRelicIds),
-    [selectedRelicIds],
-  );
-  const wrappedRelicMap = useMemo(
-    () => new Map(wrappedRelics.map((item) => [item.id, item])),
-    [wrappedRelics],
-  );
-
-  const zones = useMemo(
-    () => (data ? collectZones(data.items) : []),
-    [data],
-  );
+  const selectedRelicIdSet = useMemo(() => new Set(selectedRelicIds), [selectedRelicIds]);
   const normalizedQuery = query.trim().toLowerCase();
+  const filtered = useMemo(
+    () => routedItems.filter((entry) =>
+      matchesSearch(entry, normalizedQuery) && matchesZones(entry, selectedZones)),
+    [normalizedQuery, routedItems, selectedZones],
+  );
+  const selectedRelics = useMemo(
+    () => wrappedRelics.filter((item) => selectedRelicIdSet.has(item.id)),
+    [selectedRelicIdSet, wrappedRelics],
+  );
+  const allFilteredSelected = filtered.length > 0
+    && filtered.every((entry) => selectedRelicIdSet.has(entry.item.id));
 
-  const filtered = useMemo(() => {
-    if (!data) return [];
-    return data.items.filter(
-      (item) =>
-        matchesSearch(item, normalizedQuery) &&
-        matchesZones(item, selectedZones),
-    );
-  }, [data, normalizedQuery, selectedZones]);
-
-  /** 当前多选藏品的完整对象，供战斗预览面板求值。 */
-  const selectedRelics = useMemo(() => {
-    return wrappedRelics.filter((item) => selectedRelicIdSet.has(item.id));
-  }, [wrappedRelics, selectedRelicIdSet]);
-
-  /** 当前难度完整原始对象，同时传给 graph formula 写入上下文。 */
-  const selectedDifficulty = useMemo(() => {
-    return (
-      topicArtifact?.difficulties.find(
-        (difficulty) => difficultyKey(difficulty) === selectedDifficultyKey,
-      ) ?? null
-    );
-  }, [selectedDifficultyKey, topicArtifact]);
-
-  const allFilteredSelected =
-    filtered.length > 0 && filtered.every((item) => selectedRelicIdSet.has(item.id));
-
-  /** 切换某个乘区的选中状态。 */
+  /** 切换一个攻击力 zone 筛选。 */
   function toggleZone(zoneId: string) {
-    setSelectedZoneIds((prev) =>
-      prev.includes(zoneId)
-        ? prev.filter((id) => id !== zoneId)
-        : [...prev, zoneId],
-    );
+    setSelectedZoneIds((previous) => previous.includes(zoneId)
+      ? previous.filter((id) => id !== zoneId)
+      : [...previous, zoneId]);
   }
 
-  /** 切换行展开。 */
-  function toggleExpanded(itemId: string) {
-    setExpandedIds((prev) =>
-      prev.includes(itemId)
-        ? prev.filter((id) => id !== itemId)
-        : [...prev, itemId],
-    );
-  }
-
-  /** 切换藏品多选。 */
+  /** 切换单件藏品的公式计算选择。 */
   function toggleRelicSelected(itemId: string) {
-    setSelectedRelicIds((prev) =>
-      prev.includes(itemId)
-        ? prev.filter((id) => id !== itemId)
-        : [...prev, itemId],
-    );
+    setSelectedRelicIds((previous) => previous.includes(itemId)
+      ? previous.filter((id) => id !== itemId)
+      : [...previous, itemId]);
   }
 
-  /** 切换已选藏品的独立启用状态。 */
+  /** 更新包装藏品启用状态，不修改原始 relic 和 charBuffData。 */
   function toggleRelicEnabled(itemId: string) {
-    setWrappedRelics((previous) =>
-      previous.map((item) =>
-        item.id === itemId ? { ...item, enable: !item.enable } : item,
-      ),
-    );
+    setWrappedRelics((previous) => previous.map((item) =>
+      item.id === itemId ? { ...item, enable: !item.enable } : item));
   }
 
-  /** 更新用户层数；只替换包装外层，绝不修改原始 relic/charBuffs。 */
+  /** 更新模板程序消费的非负整数层数。 */
   function updateRelicLayer(itemId: string, layer: number) {
-    setWrappedRelics((previous) =>
-      previous.map((item) => (item.id === itemId ? { ...item, layer } : item)),
-    );
+    setWrappedRelics((previous) => previous.map((item) =>
+      item.id === itemId ? { ...item, layer } : item));
   }
 
-  /** 全选 / 取消全选当前过滤结果。 */
+  /** 全选或取消当前筛选后的藏品。 */
   function toggleSelectFiltered() {
     if (allFilteredSelected) {
-      const filteredIds = new Set(filtered.map((item) => item.id));
-      setSelectedRelicIds((prev) => prev.filter((id) => !filteredIds.has(id)));
+      const filteredIds = new Set(filtered.map((entry) => entry.item.id));
+      setSelectedRelicIds((previous) => previous.filter((id) => !filteredIds.has(id)));
       return;
     }
-    setSelectedRelicIds((prev) => {
-      const next = new Set(prev);
-      for (const item of filtered) next.add(item.id);
-      return [...next];
-    });
+    setSelectedRelicIds((previous) => [
+      ...new Set([...previous, ...filtered.map((entry) => entry.item.id)]),
+    ]);
   }
 
   if (loadError) {
     return (
-      <div
-        className={cn(
-          'not-prose my-6 rounded-2xl border border-dashed px-4 py-8 text-center text-sm text-fd-muted-foreground',
-          className,
-        )}
-      >
-        加载主题 <code>{topicId}</code> 失败：{loadError}。请先运行{' '}
-        <code>pnpm graph:export -- {topicId}</code>，再执行{' '}
-        <code>pnpm docs:generate</code>。
+      <div className={cn('not-prose my-6 rounded-2xl border border-dashed px-4 py-8 text-center text-sm text-fd-muted-foreground', className)}>
+        加载主题 <code>{topicId}</code> 失败：{loadError}
       </div>
     );
   }
-
-  if (!data || !topicArtifact) {
+  if (loading) {
     return (
-      <div
-        className={cn(
-          'not-prose my-6 rounded-2xl border px-4 py-10 text-center text-sm text-fd-muted-foreground',
-          className,
-        )}
-      >
-        正在加载藏品乘区数据…
+      <div className={cn('not-prose my-6 rounded-2xl border px-4 py-10 text-center text-sm text-fd-muted-foreground', className)}>
+        正在分析攻击力藏品…
       </div>
     );
   }
 
   return (
     <div className={cn('not-prose my-4 space-y-4', className)}>
-      <DifficultySelectionTable
-        topicId={topicId}
-        topic={topicArtifact}
-        selectedKey={selectedDifficultyKey}
-        onSelect={(difficulty) => setSelectedDifficultyKey(difficultyKey(difficulty))}
-      />
-
       <CombatPreviewPanel
         topicId={topicId}
         selectedRelics={selectedRelics}
-        difficulties={topicArtifact.difficulties}
-        selectedDifficulty={selectedDifficulty}
+        zoneComments={zoneComments}
       />
 
-      <div className="rounded-2xl border bg-fd-card p-4 text-fd-card-foreground shadow-sm">
+      <section className="rounded-2xl border bg-fd-card p-4 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-base font-semibold">{data.topic.name}</h2>
-            <p className="mt-0.5 text-sm text-fd-muted-foreground">
-              显示 {filtered.length} / {data.items.length} 件藏品
-              {selectedZoneIds.length > 0
-                ? ` · 已选 ${selectedZoneIds.length} 个乘区`
-                : ''}
-              {selectedRelicIds.length > 0
-                ? ` · 已选 ${selectedRelicIds.length} 件藏品参与计算`
-                : ''}
+            <h2 className="text-base font-semibold">{topicName}</h2>
+            <p className="mt-1 text-xs text-fd-muted-foreground">
+              攻击力版本 · 显示 {filtered.length} / {routedItems.length} 件 · 已选 {selectedRelicIds.length} 件
             </p>
           </div>
           <label className="relative block w-full max-w-md">
@@ -816,135 +447,94 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="搜索藏品名、原文描述、乘区…"
+              placeholder="搜索藏品、buff、黑板或攻击力乘区…"
               className="w-full rounded-xl border bg-fd-background py-2 pr-9 pl-9 text-sm outline-none focus:border-fd-primary"
             />
             {query ? (
               <button
                 type="button"
                 aria-label="清空搜索"
-                className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-foreground"
                 onClick={() => setQuery('')}
+                className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-fd-muted-foreground hover:bg-fd-accent"
               >
                 <X className="size-3.5" />
               </button>
             ) : null}
           </label>
         </div>
-
-        <div className="mt-4">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-xs font-medium text-fd-muted-foreground">
-              加成乘区过滤（多选）
-            </p>
-            <div className="flex items-center gap-3">
-              {selectedRelicIds.length > 0 ? (
-                <button
-                  type="button"
-                  className="text-xs text-fd-primary hover:underline"
-                  onClick={() => setSelectedRelicIds([])}
-                >
-                  清除藏品选择
-                </button>
-              ) : null}
-              {selectedZoneIds.length > 0 ? (
-                <button
-                  type="button"
-                  className="text-xs text-fd-primary hover:underline"
-                  onClick={() => setSelectedZoneIds([])}
-                >
-                  清除乘区筛选
-                </button>
-              ) : null}
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            aria-pressed={selectedZones.has(ZONE_FILTER_NONE)}
+            onClick={() => toggleZone(ZONE_FILTER_NONE)}
+            className={cn(
+              'rounded-full border px-2.5 py-1 text-xs',
+              selectedZones.has(ZONE_FILTER_NONE) && 'border-fd-primary bg-fd-primary/10 text-fd-primary',
+            )}
+          >
+            无攻击力乘区
+          </button>
+          {availableZones.map((zoneId) => (
             <button
+              key={zoneId}
               type="button"
-              aria-pressed={selectedZones.has(ZONE_FILTER_NONE)}
-              onClick={() => toggleZone(ZONE_FILTER_NONE)}
+              aria-pressed={selectedZones.has(zoneId)}
+              onClick={() => toggleZone(zoneId)}
               className={cn(
-                'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors',
-                selectedZones.has(ZONE_FILTER_NONE)
-                  ? 'border-fd-primary bg-fd-primary/10 text-fd-primary'
-                  : 'bg-fd-background text-fd-muted-foreground hover:border-fd-primary/40 hover:text-fd-foreground',
+                'rounded-full border px-2.5 py-1 text-xs',
+                selectedZones.has(zoneId) && 'border-fd-primary bg-fd-primary/10 text-fd-primary',
               )}
             >
-              <span className="font-mono font-medium">—</span>
-              <span>无加成乘区</span>
+              {zoneComments[zoneId] ?? zoneId}
             </button>
-            {zones.map((zone) => {
-              const active = selectedZones.has(zone.id);
-              return (
-                <button
-                  key={zone.id}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => toggleZone(zone.id)}
-                  className={cn(
-                    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors',
-                    active
-                      ? 'border-fd-primary bg-fd-primary/10 text-fd-primary'
-                      : 'bg-fd-background text-fd-muted-foreground hover:border-fd-primary/40 hover:text-fd-foreground',
-                  )}
-                >
-                  <span className="font-mono font-medium">{zone.symbol}</span>
-                  <span>{zone.name}</span>
-                </button>
-              );
-            })}
-          </div>
+          ))}
         </div>
-      </div>
+      </section>
 
-      <div className="overflow-hidden rounded-2xl border bg-fd-card text-fd-card-foreground">
+      <div className="overflow-hidden rounded-2xl border bg-fd-card">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[48rem] border-collapse text-sm">
+          {/* 表格正文允许原生鼠标拖拽框选，交互控件各自保持 select-none。 */}
+          <table className="w-full min-w-[48rem] border-collapse text-sm select-text selection:bg-fd-primary/25 selection:text-fd-foreground">
             <thead>
               <tr className="border-b bg-fd-muted/40 text-left text-fd-muted-foreground">
-                <th className="w-10 px-3 py-2.5">
+                <th className="w-10 select-none px-3 py-2.5">
                   <input
                     type="checkbox"
                     checked={allFilteredSelected}
                     onChange={toggleSelectFiltered}
                     aria-label="全选当前过滤结果"
-                    className="size-4 accent-[var(--color-fd-primary)]"
+                    className="size-4 select-none accent-[var(--color-fd-primary)]"
                   />
                 </th>
                 <th className="w-14 px-3 py-2.5 font-medium">启用</th>
                 <th className="w-20 px-3 py-2.5 font-medium">层数</th>
                 <th className="w-10 px-3 py-2.5" aria-hidden />
-                <th className="w-[18%] px-3 py-2.5 font-medium">藏品名</th>
-                <th className="px-3 py-2.5 font-medium">原文描述</th>
-                <th className="w-[28%] px-3 py-2.5 font-medium">加成乘区</th>
+                <th className="w-[20%] px-3 py-2.5 font-medium">藏品</th>
+                <th className="px-3 py-2.5 font-medium">原文</th>
+                <th className="w-[28%] px-3 py-2.5 font-medium">攻击力乘区</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((item) => {
-                const wrappedItem = wrappedRelicMap.get(item.id);
-                // 加载阶段已验证完整性；这里保留空保护以避免异常 JSON 破坏整个页面。
-                if (!wrappedItem) return null;
-                return (
-                  <RelicRow
-                    key={item.id}
-                    item={item}
-                    wrappedItem={wrappedItem}
-                    expanded={expandedIdSet.has(item.id)}
-                    selected={selectedRelicIdSet.has(item.id)}
-                    onToggleExpand={() => toggleExpanded(item.id)}
-                    onToggleSelect={() => toggleRelicSelected(item.id)}
-                    onToggleEnable={() => toggleRelicEnabled(item.id)}
-                    onLayerChange={(layer) => updateRelicLayer(item.id, layer)}
-                  />
-                );
-              })}
+              {filtered.map((entry) => (
+                <RelicRow
+                  key={entry.item.id}
+                  entry={entry}
+                  comments={zoneComments}
+                  expanded={expandedIdSet.has(entry.item.id)}
+                  selected={selectedRelicIdSet.has(entry.item.id)}
+                  onToggleExpand={() => setExpandedIds((previous) =>
+                    previous.includes(entry.item.id)
+                      ? previous.filter((id) => id !== entry.item.id)
+                      : [...previous, entry.item.id])}
+                  onToggleSelect={() => toggleRelicSelected(entry.item.id)}
+                  onToggleEnable={() => toggleRelicEnabled(entry.item.id)}
+                  onLayerChange={(layer) => updateRelicLayer(entry.item.id, layer)}
+                />
+              ))}
               {filtered.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={7}
-                    className="px-4 py-10 text-center text-sm text-fd-muted-foreground"
-                  >
-                    没有匹配的藏品，试试调整搜索词或乘区筛选。
+                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-fd-muted-foreground">
+                    没有匹配的藏品。
                   </td>
                 </tr>
               ) : null}

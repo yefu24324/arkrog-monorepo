@@ -1,7 +1,7 @@
 /**
- * 藏品 buff 运行时生效判定。
+ * 机制来源 buff 的运行时生效判定。
  * 覆盖：前置藏品（reliance_relics）、敌人选择器、职业选择器、关卡校验器。
- * 判定失败时贡献仍可写入 FormulaContext，但 active=false，不参与公式簿求值。
+ * 判定失败时调用方不得向 FormulaBook 写入公式项。
  */
 
 import type { BlackboardValue } from "../classify/types.js";

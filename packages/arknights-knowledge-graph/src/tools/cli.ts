@@ -56,8 +56,8 @@ function printHelp(): void {
   pnpm graph:export -- all
   pnpm graph:cypher -- "MATCH (n) RETURN label(n), count(*)"
 
-藏品→公式簿程序在 src/lib/formula/relic-programs.ts（route + apply），不生成按藏品 ID 总表。
-export 同时写出 Kuzu graph 预测与纯 TS formula 贡献函数结果。
+藏品→公式簿程序在 src/lib/mechanics/relic-programs.ts（route + apply），不生成按藏品 ID 总表。
+  export 同时写出 Kuzu graph 预测与纯 TS formula 公式项写入结果。
 ask/trace/cypher/build 可加 --db .data/custom.kuzu。`);
 }
 

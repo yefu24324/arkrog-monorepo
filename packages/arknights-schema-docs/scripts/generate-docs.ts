@@ -9,13 +9,11 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import type { ExportedOperatorIndexArtifact } from "@arkrog/arknights-schema/game-data";
 
+import type { FormulaExpression } from "../../arknights-knowledge-graph/src/lib/formula/ast.js";
 import {
-  FORMULA_BOOK,
-  FORMULA_ZONES,
-  FormulaContext,
-  explainDamageFormula,
-  renderFormula,
-} from "@arkrog/arknights-knowledge-graph/formula";
+  FormulaBook,
+  FormulaZoneId,
+} from "../../arknights-knowledge-graph/src/lib/formula/formula-book.js";
 
 /** 本脚本、源码包与生成目录的稳定路径。 */
 const CURRENT_FILE = fileURLToPath(import.meta.url);
@@ -45,6 +43,15 @@ const OPERATORS_DATA_ROOT = path.resolve(PACKAGE_ROOT, "public", "data", "operat
 const ENEMIES_DATA_ROOT = path.resolve(PACKAGE_ROOT, "public", "data", "enemies");
 const FORMULA_BOOK_CONTENT_PATH = path.resolve(CONTENT_ROOT, "formula-book.mdx");
 const FORMULA_BOOK_DATA_PATH = path.resolve(PACKAGE_ROOT, "public", "data", "formula-book.json");
+const FORMULA_BOOK_SOURCE_PATH = path.resolve(
+  PACKAGE_ROOT,
+  "..",
+  "arknights-knowledge-graph",
+  "src",
+  "lib",
+  "formula",
+  "formula-book.ts",
+);
 const GENERATED_ROOT = path.resolve(PACKAGE_ROOT, "generated");
 /** relics:export 生成的干员目录和 GameData 敌人表，用于战斗预览面板。 */
 const ENEMY_DATABASE_PATH = path.resolve(
@@ -68,6 +75,32 @@ interface TypeFieldDoc {
   /** TypeScript 类型表达式。 */
   typeExpression: string;
 }
+
+/** 文档 JSON 中不包含 class 方法的递归公式 AST。 */
+type SerializedFormulaExpression =
+  | {
+      kind: "item";
+      tooltip: string;
+      value: number;
+    }
+  | {
+      kind: "operation";
+      operands: SerializedFormulaExpression[];
+      operator: string;
+    }
+  | {
+      comment: string;
+      kind: "zone";
+      operands: SerializedFormulaExpression[];
+      operator: string;
+      zoneId: string;
+    }
+  | {
+      comment: string;
+      expression: SerializedFormulaExpression;
+      id: string;
+      kind: "formula";
+    };
 
 /** 一个 interface/type 定义的文档元数据。 */
 interface TypeDefinitionDoc {
@@ -614,7 +647,12 @@ function readHumanRelicZoneArtifact(
   if (raw.schemaVersion !== 1 || raw.topic?.id !== topicId || !Array.isArray(raw.items)) {
     throw new Error(`${sourcePath} 不是有效的 human 藏品乘区文件。`);
   }
-  const knownZones = new Set(Object.keys(FORMULA_ZONES));
+  // human 只能引用 FormulaBook 中由 zone(...) 定义的真实可写乘区，派生公式 ID 不可写入。
+  const knownZones = new Set<string>(
+    Object.values(new FormulaBook().zones)
+      .filter((node) => node.kind === "zone")
+      .map((node) => node.zoneId),
+  );
   const itemIds = new Set<string>();
   for (const item of raw.items) {
     if (!item.id || !item.reviewer || itemIds.has(item.id)) {
@@ -713,8 +751,8 @@ ${cards}
   <Card title="藏品乘区人工校验" href="/docs/relic-zone-validation">
     对照 Kuzu 图谱、公式贡献函数与稀疏 human 人工修正
   </Card>
-  <Card title="战斗公式簿" href="/docs/formula-book">
-    浏览属性、资源、承伤和伤害公式，以及结构化乘区与公式 AST
+  <Card title="公式簿" href="/docs/formula-book">
+    operator_final_atk
   </Card>
 </Cards>
 `;
@@ -733,44 +771,104 @@ ${cards}
   );
 }
 
-/** 从实验公式源码生成浏览器可读取的数据和 Fumadocs 页面。 */
+/** 从 FormulaZoneId 枚举成员前的 JSDoc 提取乘区中文注释。 */
+function readFormulaZoneComments(): ReadonlyMap<string, string> {
+  const sourceText = fs.readFileSync(FORMULA_BOOK_SOURCE_PATH, "utf8");
+  const sourceFile = ts.createSourceFile(
+    FORMULA_BOOK_SOURCE_PATH,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const comments = new Map<string, string>();
+  sourceFile.forEachChild((node) => {
+    if (!ts.isEnumDeclaration(node) || node.name.text !== "FormulaZoneId") return;
+    for (const member of node.members) {
+      if (!member.initializer || !ts.isStringLiteral(member.initializer)) continue;
+      const leadingText = sourceText.slice(member.getFullStart(), member.getStart(sourceFile));
+      const jsDocs = [...leadingText.matchAll(/\/\*\*([\s\S]*?)\*\//g)];
+      const latest = jsDocs.at(-1)?.[1];
+      if (!latest) continue;
+      const comment = latest
+        .split(/\r?\n/)
+        .map((line) => line.replace(/^\s*\*?\s?/, "").trim())
+        .filter(Boolean)
+        .join(" ");
+      if (comment) comments.set(member.initializer.text, comment);
+    }
+  });
+  return comments;
+}
+
+/** 把 FormulaBook class AST 转换为无方法、无重复字段的文档 AST。 */
+function serializeFormulaExpression(
+  expression: FormulaExpression,
+  comments: ReadonlyMap<string, string>,
+): SerializedFormulaExpression {
+  if (expression.kind === "item") {
+    return {
+      kind: "item",
+      tooltip: expression.tooltip,
+      value: expression.value,
+    };
+  }
+  if (expression.kind === "operation") {
+    return {
+      kind: "operation",
+      operator: expression.operator,
+      operands: expression.operands.map((operand) =>
+        serializeFormulaExpression(operand, comments)),
+    };
+  }
+  if (expression.kind === "zone") {
+    const comment = comments.get(expression.zoneId);
+    if (!comment) throw new Error(`FormulaZoneId.${expression.zoneId} 缺少 JSDoc 注释。`);
+    return {
+      kind: "zone",
+      zoneId: expression.zoneId,
+      comment,
+      operator: expression.operator,
+      operands: expression.operands.map((operand) =>
+        serializeFormulaExpression(operand, comments)),
+    };
+  }
+  const comment = comments.get(expression.id);
+  if (!comment) throw new Error(`FormulaZoneId.${expression.id} 缺少 JSDoc 注释。`);
+  return {
+    kind: "formula",
+    id: expression.id,
+    comment,
+    expression: serializeFormulaExpression(expression.expression, comments),
+  };
+}
+
+/** 从当前 FormulaBook 只生成 operator_final_atk 的递归 AST 页面。 */
 function writeFormulaBookPage(): number {
-  const emptyContext = new FormulaContext();
-  const formulas = Object.values(FORMULA_BOOK).map((definition) => ({
-    ...definition,
-    compactFormula: renderFormula(definition.id, { expandFormulaReferences: false }),
-    fullFormula: renderFormula(definition.id),
-    zones: explainDamageFormula(definition.id, emptyContext).map((zone) => ({
-      damageType: zone.damageType ?? null,
-      name: zone.name,
-      tooltip: zone.tooltip,
-      zoneId: zone.zoneId,
-    })),
-  }));
+  const book = new FormulaBook();
+  const formula = book.get_zone(FormulaZoneId.operator_final_atk);
+  const serializedFormula = serializeFormulaExpression(
+    formula,
+    readFormulaZoneComments(),
+  );
   const data = {
-    schemaVersion: 1,
-    source: "packages/arknights-knowledge-graph/src/lib/formula",
-    formulas,
-    zones: Object.values(FORMULA_ZONES),
+    schemaVersion: 3,
+    source: "packages/arknights-knowledge-graph/src/lib/formula/formula-book.ts",
+    formula: serializedFormula,
   };
   fs.mkdirSync(path.dirname(FORMULA_BOOK_DATA_PATH), { recursive: true });
   fs.writeFileSync(FORMULA_BOOK_DATA_PATH, `${JSON.stringify(data, null, 2)}\n`, "utf8");
   fs.writeFileSync(
     FORMULA_BOOK_CONTENT_PATH,
     `---
-title: 战斗公式簿
-description: 按我方与敌方浏览属性、伤害和其他战斗公式，以及乘区聚合方式
+title: 公式簿
 ---
-
-公式数据直接由知识图谱包的 formula 模块生成，不在文档站维护第二份定义。
-
-页面按公式的主要输出对象分为我方与敌方，再分为属性加成、伤害加成和其他加成。公式中引用了另一方的属性不会改变其分类，例如我方物理伤害仍归入“我方 · 伤害加成”。
 
 <FormulaBookExplorer />
 `,
     "utf8",
   );
-  return formulas.length;
+  return 1;
 }
 
 /** 同步藏品乘区 JSON，并生成主题页面。 */
@@ -1060,6 +1158,15 @@ function resetGeneratedContent(): void {
 
 /** 执行类型页面与游戏数据页面组装。 */
 function main(): void {
+  if (process.argv.includes("--formula-book-only")) {
+    // 公式簿窄模式不触发尚未迁移的藏品、难度与 Kuzu 文档生成链。
+    for (const target of [FORMULA_BOOK_CONTENT_PATH, FORMULA_BOOK_DATA_PATH]) {
+      if (fs.existsSync(target)) fs.rmSync(target, { force: true });
+    }
+    const formulaPages = writeFormulaBookPage();
+    console.log(`公式簿生成完成：${formulaPages} 条公式。`);
+    return;
+  }
   const entries = collectTypeEntries();
   const typeHrefByName = buildTypeHrefByName(entries);
   resetGeneratedContent();

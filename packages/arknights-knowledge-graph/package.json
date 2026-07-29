@@ -15,6 +15,10 @@
     "./formula": {
       "types": "./dist/lib/formula/index.d.ts",
       "import": "./dist/lib/formula/index.js"
+    },
+    "./mechanics": {
+      "types": "./dist/lib/mechanics/index.d.ts",
+      "import": "./dist/lib/mechanics/index.js"
     }
   },
   "scripts": {

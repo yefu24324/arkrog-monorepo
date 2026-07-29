@@ -1,228 +1,162 @@
-import type { FormulaZoneId } from "../domain/damage-zones.js";
-import type {
-  FormulaId,
-  FormulaDamageType,
-  FormulaExpression,
-  OperationExpression,
+import {
+  FormulaItemExpression,
+  FormulaNodeExpression,
+  FormulaOperationExpression,
+  FormulaZoneExpression,
+  type FormulaExpression,
+  type FormulaOperator,
 } from "./ast.js";
-import { FormulaContext, type EvaluatedFormulaZone } from "./context.js";
-import type { FormulaInputs } from "./evaluator.js";
-import { getFormula } from "./formula-book.js";
-import { getFormulaZone } from "./zones.js";
+import { FormulaBook, type FormulaId, type FormulaZoneId } from "./formula-book.js";
 
-/** 公式渲染模式。 */
-export type FormulaRenderMode = "symbolic" | "expanded";
+/** 当前公式书提供结构公式和数字公式两种输出。 */
+export type FormulaRenderMode = "symbolic" | "numeric";
 
-/** 公式渲染选项。 */
-export interface FormulaRenderOptions {
-  /** symbolic 输出通用符号，expanded 展开当前输入和加成原因。 */
+/** 公式渲染所需的最小选项。 */
+export type FormulaRenderOptions = Readonly<{
+  /** symbolic 展示稳定 ID，numeric 展开当前 FormulaBook 的 item。 */
   mode?: FormulaRenderMode;
-  /** 展开模式使用的加成上下文。 */
-  context?: FormulaContext;
-  /** 展开模式可替换到公式中的基础输入值。 */
-  inputs?: FormulaInputs;
-  /** 默认递归展开子公式，关闭后只展示子公式短符号。 */
-  expandFormulaReferences?: boolean;
-  /** 展开事件型技力公式时选择同一种触发事件。 */
-  triggerType?: string;
-  /** 通用承伤公式展开时使用的伤害类型。 */
-  damageType?: FormulaDamageType;
-}
+  /** 要读取的公式书；numeric 模式应传入已经写入 item 的实例。 */
+  book?: FormulaBook;
+}>;
 
-/** 一条公式使用的乘区及其当前来源说明。 */
-export interface FormulaZoneExplanation extends EvaluatedFormulaZone {
-  /** 当前公式引用该乘区时使用的伤害类型。 */
-  damageType?: FormulaDamageType;
-  /** 人类可读乘区名称。 */
-  name: string;
-  /** 乘区本身的用途说明。 */
-  tooltip: string;
-}
+/** 一条公式实际引用的 zone 及其当前 item。 */
+export type FormulaZoneExplanation = Readonly<{
+  /** 可写入乘区的稳定 ID。 */
+  zoneId: FormulaZoneId;
+  /** 当前 zone 的直接计算结果。 */
+  value: number;
+  /** 包含静态基数和运行时贡献的 item 副本。 */
+  items: readonly FormulaItemExpression[];
+}>;
 
-/** 把浮点数转换为稳定且紧凑的公式文本。 */
+/** 把浮点数转换成稳定、紧凑的数字文本。 */
 function formatNumber(value: number): string {
   return Number.isInteger(value) ? value.toString() : Number(value.toPrecision(12)).toString();
 }
 
-/** 为按伤害类型筛选的乘区添加可读下标。 */
-function scopedSymbol(symbol: string, damageType?: FormulaDamageType): string {
-  const suffix = damageType
-    ? { physical: "phy", magical: "mag", pure: "pure", elemental: "ep" }[damageType]
-    : "";
-  return suffix ? `${symbol}[${suffix}]` : symbol;
+/** 返回普通中缀运算符的显示符号。 */
+function operatorSymbol(operator: FormulaOperator): string {
+  if (operator === "add" || operator === "sum") return "+";
+  if (operator === "subtract") return "−";
+  if (operator === "divide") return "÷";
+  return "×";
 }
 
-/** 输出某个乘区的通用符号聚合式。 */
-function renderSymbolicZone(zoneId: FormulaZoneId, damageType?: FormulaDamageType): string {
-  const zone = getFormulaZone(zoneId);
-  const symbol = scopedSymbol(zone.symbol, damageType);
-  if (zone.aggregation.kind === "product-one-plus") return `Πᵢ(1 + ${symbol}ᵢ)`;
-  if (zone.aggregation.kind === "product") return `Πᵢ${symbol}ᵢ`;
-  if (zone.aggregation.kind === "union") return `(1 - Πᵢ(1 - ${symbol}ᵢ))`;
-  if (zone.aggregation.kind === "max") return `max(${formatNumber(zone.aggregation.base)}, ${symbol}ᵢ)`;
-  const { base, termScale } = zone.aggregation;
-  if (base === 0 && termScale === 1) return `Σᵢ${symbol}ᵢ`;
-  if (base === 1 && termScale === 1) return `(1 + Σᵢ${symbol}ᵢ)`;
-  if (base === 1 && termScale === -1) return `(1 - Σᵢ${symbol}ᵢ)`;
-  if (base === 1 && termScale === 0.01) return `(1 + Σᵢ${symbol}ᵢ / 100)`;
-  return `(${formatNumber(base)} + ${formatNumber(termScale)} × Σᵢ${symbol}ᵢ)`;
+/** 输出已经递归转换完成的数学运算。 */
+function printOperation(operator: FormulaOperator, operands: readonly string[]): string {
+  if (operator === "max" || operator === "min") return `${operator}(${operands.join(", ")})`;
+  if (operator === "union") {
+    if (operands.length === 0) return "0";
+    return `(1 − ${operands.map((operand) => `(1 − ${operand})`).join(" × ")})`;
+  }
+  if (operator === "product-one-plus") {
+    if (operands.length === 0) return "1";
+    return operands.map((operand) => `(1 + ${operand})`).join(" × ");
+  }
+  if (operator === "percent-plus") {
+    const [base = "0", ...percentages] = operands;
+    if (percentages.length === 0) return base;
+    return `(${base} + (${percentages.join(" + ")}) ÷ 100)`;
+  }
+  const identity = operator === "add" || operator === "sum" || operator === "subtract" ? "0" : "1";
+  if (operands.length === 0) return identity;
+  if (operands.length === 1) return operands[0] ?? identity;
+  return `(${operands.join(` ${operatorSymbol(operator)} `)})`;
 }
 
-/** 输出带 tooltip 的单个数值贡献项。 */
-function renderContribution(value: number, tooltip: string): string {
-  return `${formatNumber(Math.abs(value))}「${tooltip}」`;
+/** 递归展开命名公式，但把真实 zone 保持为稳定 ID 原子项。 */
+function printSymbolicExpression(expression: FormulaExpression): string {
+  if (expression instanceof FormulaItemExpression) return expression.tooltip;
+  if (expression instanceof FormulaZoneExpression) return expression.zoneId;
+  if (expression instanceof FormulaNodeExpression) return printSymbolicExpression(expression.expression);
+  if (expression instanceof FormulaOperationExpression) {
+    return printOperation(
+      expression.operator,
+      expression.operands.map((operand) => printSymbolicExpression(operand)),
+    );
+  }
+  throw new Error("遇到未知公式节点");
 }
 
-/** 输出当前上下文中某个乘区的实际展开式。 */
-function renderExpandedZone(
-  zoneId: FormulaZoneId,
-  damageType: FormulaDamageType | undefined,
-  context: FormulaContext,
-  triggerType?: string,
+/** 递归展开当前 FormulaBook 中 zone 的全部 item。 */
+function printNumericExpression(expression: FormulaExpression): string {
+  if (expression instanceof FormulaItemExpression) return formatNumber(expression.value);
+  if (expression instanceof FormulaNodeExpression) return printNumericExpression(expression.expression);
+  if (expression instanceof FormulaZoneExpression) return printNumericExpression(expression.expression);
+  if (expression instanceof FormulaOperationExpression) {
+    return printOperation(
+      expression.operator,
+      expression.operands.map((operand) => printNumericExpression(operand)),
+    );
+  }
+  throw new Error("遇到未知公式节点");
+}
+
+/** 打印以稳定 zone ID 为原子项的递归结构公式。 */
+export function printSymbolicFormula(
+  formulaId: FormulaId,
+  book: FormulaBook = new FormulaBook(),
 ): string {
-  const zone = getFormulaZone(zoneId);
-  const entries = context.getContributions(zoneId, { damageType, triggerType });
-  if (zone.aggregation.kind === "product-one-plus") {
-    if (entries.length === 0) return "1";
-    return `(${entries.map((entry) => `(1 + ${renderContribution(entry.value, entry.tooltip)})`).join(" × ")})`;
-  }
-  if (zone.aggregation.kind === "product") {
-    if (entries.length === 0) return "1";
-    return `(${entries.map((entry) => renderContribution(entry.value, entry.tooltip)).join(" × ")})`;
-  }
-  if (zone.aggregation.kind === "union") {
-    if (entries.length === 0) return "0";
-    return `(1 - ${entries.map((entry) => `(1 - ${renderContribution(entry.value, entry.tooltip)})`).join(" × ")})`;
-  }
-  if (zone.aggregation.kind === "max") {
-    return `max(${[formatNumber(zone.aggregation.base), ...entries.map((entry) => renderContribution(entry.value, entry.tooltip))].join(", ")})`;
-  }
-
-  const terms: string[] = [];
-  if (zone.aggregation.base !== 0 || entries.length === 0) terms.push(formatNumber(zone.aggregation.base));
-  for (const entry of entries) {
-    const value = zone.aggregation.termScale * entry.value;
-    const rendered = renderContribution(value, entry.tooltip);
-    if (terms.length === 0) terms.push(value < 0 ? `-${rendered}` : rendered);
-    else terms.push(`${value < 0 ? "-" : "+"} ${rendered}`);
-  }
-  return terms.length > 1 ? `(${terms.join(" ")})` : terms[0] ?? "0";
+  const definition = book.get_zone(formulaId);
+  return `${definition.id} = ${printSymbolicExpression(definition.expression)}`;
 }
 
-/** 按运算符输出已经递归渲染完成的子表达式。 */
-function renderOperation(node: OperationExpression, operands: string[]): string {
-  if (node.operator === "max" || node.operator === "min") return `${node.operator}(${operands.join(", ")})`;
-  const operator = {
-    add: "+",
-    subtract: "-",
-    multiply: "×",
-    divide: "÷",
-  }[node.operator];
-  return `(${operands.join(` ${operator} `)})`;
-}
-
-/** 递归输出一棵公式 AST。 */
-function renderExpression(
-  expression: FormulaExpression,
-  options: Required<Pick<FormulaRenderOptions, "mode" | "expandFormulaReferences">> & FormulaRenderOptions,
-  formulaStack: readonly FormulaId[],
+/** 打印当前 FormulaBook 中只包含数值和数学运算符的公式。 */
+export function printNumericFormula(
+  formulaId: FormulaId,
+  book: FormulaBook,
 ): string {
-  switch (expression.kind) {
-    case "constant":
-      return formatNumber(expression.value);
-    case "input": {
-      const value = options.inputs?.[expression.inputId];
-      return options.mode === "expanded" && value !== undefined
-        ? `${formatNumber(value)}「${expression.tooltip}」`
-        : expression.symbol;
-    }
-    case "zone":
-      return options.mode === "expanded" && options.context
-        ? renderExpandedZone(
-            expression.zoneId,
-            expression.damageType ?? options.damageType,
-            options.context,
-            options.triggerType,
-          )
-        : renderSymbolicZone(expression.zoneId, expression.damageType ?? options.damageType);
-    case "formula": {
-      const referenced = getFormula(expression.formulaId);
-      if (!options.expandFormulaReferences) return referenced.symbol;
-      if (formulaStack.includes(expression.formulaId)) {
-        throw new Error(`公式存在循环引用：${[...formulaStack, expression.formulaId].join(" -> ")}`);
-      }
-      return renderExpression(referenced.expression, options, [...formulaStack, expression.formulaId]);
-    }
-    case "operation":
-      return renderOperation(
-        expression,
-        expression.operands.map((operand) => renderExpression(operand, options, formulaStack)),
-      );
-  }
+  const definition = book.get_zone(formulaId);
+  return `${printNumericExpression(definition.expression)} = ${formatNumber(definition.calculate())}`;
 }
 
-/** 输出带左值名称的完整公式预览。 */
+/** 根据明确模式打印结构公式或数字公式。 */
 export function renderFormula(
   formulaId: FormulaId,
   options: FormulaRenderOptions = {},
 ): string {
-  const definition = getFormula(formulaId);
-  const normalizedOptions = {
-    ...options,
-    mode: options.mode ?? "symbolic",
-    expandFormulaReferences: options.expandFormulaReferences ?? true,
-  };
-  return `${definition.symbol} = ${renderExpression(definition.expression, normalizedOptions, [formulaId])}`;
+  const book = options.book ?? new FormulaBook();
+  return options.mode === "numeric"
+    ? printNumericFormula(formulaId, book)
+    : printSymbolicFormula(formulaId, book);
 }
 
-/** @deprecated 公式簿已不限于伤害，请使用 renderFormula。 */
-export const renderDamageFormula = renderFormula;
+/** 递归收集一条派生公式实际引用的真实 zone，保持首次出现顺序。 */
+export function collectFormulaZones(
+  formulaId: FormulaId,
+  book: FormulaBook = new FormulaBook(),
+): readonly FormulaZoneExpression[] {
+  const target = new Map<FormulaZoneId, FormulaZoneExpression>();
+  const visited = new Set<FormulaExpression>();
 
-/** 递归收集公式实际引用到的乘区，并保留伤害类型筛选。 */
-function collectZoneReferences(
-  expression: FormulaExpression,
-  target: Map<string, { zoneId: FormulaZoneId; damageType?: FormulaDamageType }>,
-  formulaStack: readonly FormulaId[],
-): void {
-  if (expression.kind === "zone") {
-    target.set(`${expression.zoneId}:${expression.damageType ?? "all"}`, {
-      zoneId: expression.zoneId,
-      damageType: expression.damageType,
-    });
-    return;
+  /** 避免共享 AST 节点重复遍历，同时递归展开派生公式。 */
+  function visit(expression: FormulaExpression): void {
+    if (visited.has(expression)) return;
+    visited.add(expression);
+    if (expression instanceof FormulaZoneExpression) {
+      target.set(expression.zoneId, expression);
+      expression.operands.forEach(visit);
+      return;
+    }
+    if (expression instanceof FormulaNodeExpression) {
+      visit(expression.expression);
+      return;
+    }
+    if (expression instanceof FormulaOperationExpression) expression.operands.forEach(visit);
   }
-  if (expression.kind === "formula") {
-    if (formulaStack.includes(expression.formulaId)) return;
-    collectZoneReferences(
-      getFormula(expression.formulaId).expression,
-      target,
-      [...formulaStack, expression.formulaId],
-    );
-    return;
-  }
-  if (expression.kind === "operation") {
-    expression.operands.forEach((operand) => collectZoneReferences(operand, target, formulaStack));
-  }
+
+  visit(book.get_zone(formulaId).expression);
+  return [...target.values()];
 }
 
-/** 返回一条公式使用的所有乘区、当前数值、tooltip、reason 和证据来源。 */
+/** 返回一条派生公式引用的全部真实 zone 及其当前 item。 */
 export function explainFormula(
   formulaId: FormulaId,
-  context: FormulaContext,
+  book: FormulaBook,
 ): readonly FormulaZoneExplanation[] {
-  const references = new Map<string, { zoneId: FormulaZoneId; damageType?: FormulaDamageType }>();
-  collectZoneReferences(getFormula(formulaId).expression, references, [formulaId]);
-  return [...references.values()].map(({ zoneId, damageType }) => {
-    const definition = getFormulaZone(zoneId);
-    const evaluated = context.evaluateZone(zoneId, { damageType });
-    return {
-      ...evaluated,
-      damageType,
-      name: definition.name,
-      tooltip: definition.tooltip,
-    };
-  });
+  return collectFormulaZones(formulaId, book).map((expression) => ({
+    zoneId: expression.zoneId,
+    value: expression.calculate(),
+    items: expression.items.map((entry) => entry.clone()),
+  }));
 }
-
-/** @deprecated 公式簿已不限于伤害，请使用 explainFormula。 */
-export const explainDamageFormula = explainFormula;

@@ -4,20 +4,21 @@ import {
   ROGUE_DIFFICULTY_SEMANTIC_RULES,
   type RogueDifficultySemanticRule,
 } from "../domain/difficulty-rules.js";
-import type { FormulaZoneId } from "../domain/damage-zones.js";
-import type { FormulaDamageType } from "./ast.js";
+import { FormulaZoneId } from "../formula/formula-book.js";
+import type { FinalDamageType } from "../domain/damage-types.js";
 import {
   evaluateBuffActivation,
   type FormulaActivationContext,
 } from "./activation.js";
 import {
   FormulaContext,
-  type FormulaContribution,
-} from "./context.js";
+  FormulaItem,
+} from "../formula/context.js";
 import {
-  contributionsFromClassifiedEffect,
-  toContributionEffect,
-} from "./relic-contributions.js";
+  formulaItemsFromClassifiedEffect,
+  toFormulaItemEffect,
+  type FormulaItemPlacement,
+} from "./relic-items.js";
 import {
   routeRelicBuffToZones,
   type RelicBuffZoneRoute,
@@ -60,7 +61,7 @@ export interface RogueDifficultyZoneEffect {
   /** 目标范围。 */
   target: RogueDifficultySemanticRule["target"];
   /** 伤害类型限制。 */
-  damageTypes?: readonly FormulaDamageType[];
+  damageTypes?: readonly FinalDamageType[];
   /** 命中的稳定语义规则。 */
   rule: RogueDifficultySemanticRule;
   /** 数值事实固定来自 GameData 难度描述。 */
@@ -330,31 +331,21 @@ function evaluateDifficultyRuleActivation(
   return { active: reasons.length === 0, reasons };
 }
 
-/** 将一条已路由难度效果转换成可追踪公式贡献。 */
-function difficultyContribution(
-  input: ApplyRogueDifficultyInput,
+/** 将一条已生效难度效果转换成最小公式项写入。 */
+function difficultyPlacement(
   effect: RogueDifficultyZoneEffect,
-  active: boolean,
-  inactiveReasons: readonly string[],
-): FormulaContribution {
+): FormulaItemPlacement {
   return {
-    id: `difficulty:${input.topicId}:${effect.modeDifficulty}:${effect.grade}:${effect.rule.id}`,
     zoneId: effect.zoneId,
-    value: effect.value,
-    tooltip: `${effect.modeDifficulty} ${effect.grade} · ${effect.matchedText}`,
-    reason: `${effect.rule.description}${active ? "" : `（未生效：${inactiveReasons.join("；")}）`}`,
-    damageTypes: effect.damageTypes,
-    active,
-    source: {
-      kind: "difficulty",
-      itemId: `${input.topicId}:${effect.modeDifficulty}:${effect.grade}`,
-      effectPath: effect.evidencePath,
+    item: new FormulaItem(
+      effect.value,
+      `${effect.modeDifficulty} ${effect.grade} · ${effect.matchedText}`,
+    ),
+    route: {
+      parameterKey: "ruleDesc",
       ruleId: effect.rule.id,
+      reason: effect.rule.description,
       evidencePath: effect.evidencePath,
-      evidencePaths:
-        effect.evidencePath === effect.guardPath
-          ? [effect.evidencePath]
-          : [effect.evidencePath, effect.guardPath],
     },
   };
 }
@@ -366,7 +357,7 @@ function difficultyContribution(
 export function applyRogueDifficultyToFormulaContext(
   context: FormulaContext,
   input: ApplyRogueDifficultyInput,
-): FormulaContribution[] {
+): FormulaItemPlacement[] {
   const selectedRoute = routeSelectedRogueDifficultyToZones(input);
   // 人工维护主题规则独立写入，不能混入 Kuzu 同源难度 effects。
   const applied = applyManualTopicRulesToFormulaContext(context, {
@@ -380,106 +371,75 @@ export function applyRogueDifficultyToFormulaContext(
   }> = [];
   for (const effect of selectedRoute.effects) {
     const activation = evaluateDifficultyRuleActivation(effect.rule, input.activation ?? {});
-    if (effect.zoneId === "OUTER_ENEMY_DAMAGE_RESISTANCE") {
+    if (effect.zoneId === FormulaZoneId.藏品局外敌人减伤最大值) {
       resistanceEffects.push({ effect, ...activation });
       continue;
     }
-    const contribution = difficultyContribution(
-      input,
-      effect,
-      activation.active,
-      activation.reasons,
-    );
-    context.addContribution(contribution);
-    applied.push(contribution);
+    // 未生效难度效果保留在 selectedRoute，不进入纯公式上下文。
+    if (!activation.active) continue;
+    const placement = difficultyPlacement(effect);
+    // FormulaBook 只接收 BuffContext 中真实存在的来源乘区。
+    if (!context.book.hasZone(placement.zoneId)) continue;
+    context.addItem(placement.zoneId, placement.item);
+    applied.push(placement);
   }
 
-  // 未生效的减伤规则仍单独保留，便于 UI 解释目标、关卡或时间条件。
-  for (const entry of resistanceEffects.filter((candidate) => !candidate.active)) {
-    const contribution = difficultyContribution(
-      input,
-      entry.effect,
-      false,
-      entry.reasons,
-    );
-    context.addContribution(contribution);
-    applied.push(contribution);
-  }
-
-  // 同一难度体系的局外减伤按伤害类型累计为一个最终配置值，再交给局外 max 乘区。
+  // 当前难度规则中的减伤均覆盖物理与法术，先累计为一个配置值再交给局外 max 乘区。
   const activeResistance = resistanceEffects.filter((candidate) => candidate.active);
-  const damageTypes: readonly FormulaDamageType[] = ["physical", "magical", "pure", "elemental"];
-  for (const damageType of damageTypes) {
-    const matching = activeResistance.filter(
-      ({ effect }) => !effect.damageTypes || effect.damageTypes.includes(damageType),
-    );
-    if (matching.length === 0) continue;
-    const evidencePaths = matching.map(({ effect }) => effect.evidencePath);
-    const value = matching.reduce((sum, { effect }) => sum + effect.value, 0);
-    const contribution: FormulaContribution = {
-      id: `difficulty:${input.topicId}:${input.selectedDifficulty?.modeDifficulty}:${input.selectedDifficulty?.grade}:outer-resistance:${damageType}`,
-      zoneId: "OUTER_ENEMY_DAMAGE_RESISTANCE",
-      value,
-      tooltip: `累计难度减伤 · ${damageType}`,
-      reason: `Kuzu 同源规则累计 ${matching.length} 条当前目标适用的局外难度减伤。`,
-      damageTypes: [damageType],
-      active: true,
-      source: {
-        kind: "difficulty",
-        itemId: `${input.topicId}:${input.selectedDifficulty?.modeDifficulty}:${input.selectedDifficulty?.grade}`,
-        ruleId: matching.map(({ effect }) => effect.rule.id).join("+"),
-        evidencePath: evidencePaths[0],
-        evidencePaths,
+  if (activeResistance.length > 0) {
+    const value = activeResistance.reduce((sum, { effect }) => sum + effect.value, 0);
+    const placement: FormulaItemPlacement = {
+      zoneId: FormulaZoneId.藏品局外敌人减伤最大值,
+      item: new FormulaItem(value, "累计难度物理与法术减伤"),
+      route: {
+        parameterKey: "ruleDesc",
+        ruleId: activeResistance.map(({ effect }) => effect.rule.id).join("+"),
+        reason: `Kuzu 同源规则累计 ${activeResistance.length} 条当前目标适用的局外难度减伤。`,
+        evidencePath: activeResistance[0]?.effect.evidencePath ?? "",
       },
     };
-    context.addContribution(contribution);
-    applied.push(contribution);
+    // 未被旧前端公式定义的机制乘区只保留路由，不写入 FormulaContext。
+    if (context.book.hasZone(placement.zoneId)) {
+      context.addItem(placement.zoneId, placement.item);
+      applied.push(placement);
+    }
   }
 
   // 条件藏品复用真实藏品程序取值，再把来源改写为 difficulty 以保持上下文语义。
   const enabledConditionalRelicIds = new Set(input.enabledConditionalRelicIds ?? []);
   for (const conditional of selectedRoute.conditionalRelicEffects) {
-    const effect = toContributionEffect(conditional.route.effect);
+    const effect = toFormulaItemEffect(conditional.route.effect);
     const activation = evaluateBuffActivation(
       effect.key,
       effect.blackboard,
       input.activation ?? {},
     );
     const conditionEnabled = enabledConditionalRelicIds.has(conditional.link.id);
-    const conditionReason =
-      conditional.link.kind === "LEGACY_CHOICE"
-        ? "需持有上一局获得的遗留助力，并在本局开局选择该支援"
-        : `需满足条件载体：${conditional.link.sourceItem.usage ?? conditional.link.sourceItem.name}`;
-    const baseContributions = contributionsFromClassifiedEffect(
+    // 条件关联和 buff 激活必须同时成立，未生效记录仍由 selectedRoute 提供解释。
+    if (!conditionEnabled || !activation.active) continue;
+    const basePlacements = formulaItemsFromClassifiedEffect(
       {
         id: conditional.link.targetId,
         name: conditional.link.targetItem.name,
       },
       effect,
-      {
-        active: conditionEnabled && activation.active,
-        inactiveReasons: [
-          ...(conditionEnabled ? [] : [conditionReason]),
-          ...activation.inactiveReasons,
-        ],
-      },
     );
-    for (const base of baseContributions) {
-      const contribution: FormulaContribution = {
+    for (const base of basePlacements) {
+      const placement: FormulaItemPlacement = {
         ...base,
-        id: `difficulty-grant:${conditional.link.sourceId}:${base.id}`,
-        tooltip: `${conditional.link.kind === "LEGACY_CHOICE" ? "条件支援" : "难度条件藏品"} · ${conditional.link.targetItem.name}`,
-        reason: `${base.reason ?? ""}（${conditionReason}）`,
-        source: {
-          ...base.source,
-          kind: "difficulty",
-          itemId: conditional.link.targetId,
+        item: new FormulaItem(
+          base.item.value,
+          `${conditional.link.kind === "LEGACY_CHOICE" ? "条件支援" : "难度条件藏品"} · ${conditional.link.targetItem.name}`,
+        ),
+        route: {
+          ...base.route,
           evidencePath: conditional.link.evidencePaths[0] ?? conditional.link.jsonPath,
-          evidencePaths: [...conditional.link.evidencePaths, effect.jsonPath],
         },
       };
-      context.addContribution(contribution);
-      applied.push(contribution);
+      // 条件藏品同样只能写入 BuffContext 已声明的乘区。
+      if (!context.book.hasZone(placement.zoneId)) continue;
+      context.addItem(placement.zoneId, placement.item);
+      applied.push(placement);
     }
   }
   return applied;

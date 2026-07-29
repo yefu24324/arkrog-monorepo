@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildWrappedRelicTopicArtifact } from "../src/lib/formula/index.js";
+import { buildWrappedRelicTopicArtifact } from "@arkrog/arknights-schema/game-data";
 
 describe("buildWrappedRelicTopicArtifact", () => {
   it("保留 relic 与一对多 charBuffData 原始对象，并初始化用户态字段", () => {

@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { buildMechanicIndex, buildRelicZoneTable } from "../src/lib/classify/index.js";
-import { buildFormulaRelicZoneValidationArtifact } from "../src/lib/formula/index.js";
+import { FormulaZoneId } from "../src/lib/formula/index.js";
+import { buildFormulaRelicZoneValidationArtifact } from "../src/lib/mechanics/index.js";
 
 describe("buildFormulaRelicZoneValidationArtifact", () => {
   it("默认假设条件型藏品生效，并只输出函数可写入的乘区", () => {
-    // selector.profession 没有运行时干员上下文，但人工校验产物仍应显示 OUTER_ATK。
+    // selector.profession 没有运行时干员上下文，但人工校验产物仍应显示真实局外攻击力乘区。
     const classified = buildRelicZoneTable({
       topicId: "rogue_test",
       topicName: "测试主题",
@@ -41,7 +42,48 @@ describe("buildFormulaRelicZoneValidationArtifact", () => {
     const result = buildFormulaRelicZoneValidationArtifact(classified);
     expect(result.producer.activationPolicy).toBe("assume_active");
     expect(result.producer.numericEvaluation).toBe(false);
-    expect(result.items[0]?.zones.map((zone) => zone.id)).toEqual(["OUTER_ATK"]);
-    expect(result.items[0]?.effects[0]?.evidenceStatuses).toEqual(["computed"]);
+    expect(result.items[0]?.zones).toEqual([FormulaZoneId.operator_out_atk_mul]);
+    expect(result.items[0]?.effects[0]?.evidenceStatuses).toEqual(["inferred"]);
+  });
+
+  it("攻击速度效果携带 atk=0 时 graph 基线与 formula 都保持空乘区", () => {
+    const classified = buildRelicZoneTable({
+      topicId: "rogue_2",
+      topicName: "傀影与猩红孤钻",
+      generatedAt: "2026-01-01T00:00:00.000Z",
+      mechanicIndex: buildMechanicIndex({}),
+      detail: {
+        items: {
+          rogue_2_relic_fight_138: {
+            id: "rogue_2_relic_fight_138",
+            name: "疗养体验卡",
+            usage: "所有干员部署后10秒内攻击速度+40",
+            description: null,
+            rarity: "NORMAL",
+            sortId: 138,
+            type: "RELIC",
+          },
+        },
+        relics: {
+          rogue_2_relic_fight_138: {
+            buffs: [{
+              key: "global_buff_normal",
+              blackboard: [
+                { key: "key", value: 0, valueStr: "rogue_2_attr_up[limited]" },
+                { key: "attack_speed", value: 40, valueStr: null },
+                { key: "atk", value: 0, valueStr: null },
+              ],
+            }],
+          },
+        },
+        charBuffData: {},
+      },
+    });
+
+    const result = buildFormulaRelicZoneValidationArtifact(classified);
+    expect(classified.items[0]?.zones).toEqual([]);
+    expect(result.items[0]?.zones).toEqual([]);
+    expect(result.items[0]?.effects[0]?.classification).toBe("unknown");
+    expect(result.items[0]?.effects[0]?.predictions).toEqual([]);
   });
 });

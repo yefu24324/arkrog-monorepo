@@ -6,10 +6,10 @@
 
 | 路径 | 谁用 | 内容 |
 |------|------|------|
-| `src/lib/` | 前端 / docs / 测试 / tools | **对外纯 TS**：domain 规则、classify、formula（含藏品→公式簿程序） |
+| `src/lib/` | 前端 / docs / 测试 / tools | **对外纯 TS**：domain 规则、classify、formula 公式定义、mechanics 游戏机制适配 |
 | `src/tools/` | 本 monorepo | **自用**：Kuzu 建图、ask/trace/cypher、读盘 export |
 
-`package.json` exports：`.`、`./classify`、`./formula`。不导出 `tools`（避免拖进 kuzu）。
+`package.json` exports：`.`、`./classify`、`./formula`、`./mechanics`。不导出 `tools`（避免拖进 kuzu）。
 
 **不再**生成按藏品 ID 的 `RELIC_ZONE_BY_ITEM` 总表。运行时对选中 buff 调用路由/写入程序。
 
@@ -18,11 +18,15 @@
 ```ts
 import {
   FormulaContext,
-  applyRelicItemsToFormulaContext,
-  evaluateDamageFormula,
+  evaluateFormula,
 } from "@arkrog/arknights-knowledge-graph/formula";
+import {
+  applyRelicItemsToFormulaContext,
+} from "@arkrog/arknights-knowledge-graph/mechanics";
 
 const context = new FormulaContext();
+// 基础属性与藏品 buff 一样，作为 FormulaItem 写入对应乘区。
+context.add("干员基础攻击力", 100, "干员基础攻击力");
 applyRelicItemsToFormulaContext(context, selectedRelics, {
   // selectedRelics 使用 relics:export 生成的 { id, name, relic, charBuffs, layer, enable }。
   topicId: rogueInput.topic,
@@ -38,7 +42,7 @@ applyRelicItemsToFormulaContext(context, selectedRelics, {
     stage: stageData ? { id: stageData.id, isBoss: Boolean(stageData.isBoss) } : undefined,
   },
 });
-evaluateDamageFormula("FINAL_ATK", context, { ATK0: 100 });
+evaluateFormula("operator_in_game_atk", context);
 ```
 
 - **路由** `routeRelicBuffToZones`：buff → 乘区（与是否生效正交）
@@ -47,9 +51,13 @@ evaluateDamageFormula("FINAL_ATK", context, { ATK0: 100 });
 - **受赠者** 文档预览默认当前干员收到 `charBuffData`；职业新典训会从进阶券稳定 ID 额外校验职业
 - **批量** `applyRelicItemsToFormulaContext`：一次处理共享包装藏品；`enable=false` 完全跳过，启用列表自动形成 `reliance_relics` 依赖集合
 - **原始数据** `relic` 与 `charBuffs` 保留 GameData 原始对象，`layer` 从 0 开始并由具体藏品程序解释
-- **写入** 贡献可 `active=false`（保留记录与原因，公式簿求值自动跳过）
+- **写入** 只有已经通过生效判定的最小 `FormulaItem` 才进入 `FormulaContext`
+- **组装** 公式簿使用 `multiply`、`add`、`sum`、`union`、`max`、`product`、`productOnePlus` 等运算符 DSL 和 `item("说明", value)` 构造完整公式；所有函数仍返回同一种 `FormulaZoneExpression`
+- **基础值** 不再使用独立 `input` 参数；基础属性、伤害倍率与 buff 都以最小 `FormulaItem` 写入同名乘区
+- **伤害类型** 不进入 `FormulaItem` 或 Context 分桶；物理、法术、真实和元素最终公式分别引用自己的独立增伤乘区
+- **乘区边界** 只有 `formula-book.ts` 的 `FormulaZoneId` 真实 ID 可以用于分类、路由和 `FormulaItem` 写入
 
-实现：`src/lib/formula/activation.ts`、`relic-programs.ts`、`relic-contributions.ts`、`relic-template-programs.ts`。
+实现：`src/lib/mechanics/activation.ts`、`relic-programs.ts`、`relic-items.ts`、`relic-template-programs.ts`。
 
 ## 肉鸽难度 → 公式簿程序
 
@@ -60,10 +68,12 @@ evaluateDamageFormula("FINAL_ATK", context, { ATK0: 100 });
 ```ts
 import {
   FormulaContext,
+} from "@arkrog/arknights-knowledge-graph/formula";
+import {
   applyRogueDifficultyToFormulaContext,
   routeRogueDifficultyToZones,
   routeSelectedRogueDifficultyToZones,
-} from "@arkrog/arknights-knowledge-graph/formula";
+} from "@arkrog/arknights-knowledge-graph/mechanics";
 
 const context = new FormulaContext();
 const route = routeRogueDifficultyToZones({
@@ -76,7 +86,7 @@ const cumulativeRoute = routeSelectedRogueDifficultyToZones({
   difficulties: topic.difficulties,
   selectedDifficulty: topic.difficulties[11],
 });
-const contributions = applyRogueDifficultyToFormulaContext(context, {
+const placements = applyRogueDifficultyToFormulaContext(context, {
   topicId: "rogue_6",
   difficulties: topic.difficulties,
   selectedDifficulty: topic.difficulties[11],
@@ -90,10 +100,10 @@ const contributions = applyRogueDifficultyToFormulaContext(context, {
 - `NORMAL` 难度会累计同模式中不高于所选 grade 的效果；特殊模式只应用自身。
 - Kuzu 使用 `RogueDifficulty -> DifficultyEffect -> DamageZone` 保存原始描述、数值、目标、规则和证据路径。
 - `RogueDifficulty -> DIFFICULTY_HAS_CONDITIONAL_ITEM -> Item -> Effect -> DamageZone` 保存难度可用的失败助力与遗留支援；它们默认不生效。
-- 例如“襁褓巨龙”来自 `legacy_06 -> choice_ro6_startbuff_9 -> start_3`，需上一局至少通过两个区域且本局选择后，才把 `max_hp=0.5` 写入 `ENEMY_HP_RELIC`。
-- formula 与 Kuzu 共用 `difficulty-rules.ts`，不存在浏览器端第二份乘区表。
+- 例如“襁褓巨龙”来自 `legacy_06 -> choice_ro6_startbuff_9 -> start_3`，需上一局至少通过两个区域且本局选择后，才把 `max_hp=0.5` 写入 `relic_rune_mul.enemy_max_hp`。
+- mechanics 与 Kuzu 共用 `difficulty-rules.ts`，不存在浏览器端第二份乘区表。
 - 完整 `ruleDesc` 是版本护栏；原文更新后旧规则会失配并返回 `unknown`。
-- 静态表缺失的主题特有规则不进入 Kuzu 同源难度事实；统一放在 `src/lib/formula/topic-rules/` 下并标记为人工维护。
+- 静态表缺失的主题特有规则不进入 Kuzu 同源难度事实；统一放在 `src/lib/mechanics/topic-rules/` 下并标记为人工维护。
 - `rogue_6` NORMAL 0–3 的低难度敌方生命与攻击修正由 `topic-rules/rogue-6.ts` 按精确等级写入，禁止向更高难度累计。
 - 客户端未提供战斗实现的主题机制、特定敌人和无数值效果保持未知，不根据文案补造参数。
 
@@ -112,7 +122,7 @@ pnpm graph:typecheck
 `graph:export` 只负责依赖 Kuzu 的乘区验证，并按主题写出两份独立 JSON：
 
 - `docs/game/relic-zone-validation/graph/rogue_N.json`：只读取 Kuzu 的 `EFFECT_ENTERS_ZONE` 预测边。
-- `docs/game/relic-zone-validation/formula/rogue_N.json`：使用公式贡献函数检查可写入乘区；所有 buff 假定生效，不执行公式数值求值。
+- `docs/game/relic-zone-validation/formula/rogue_N.json`：使用公式项写入函数检查可写入乘区；所有 buff 假定生效，不执行公式数值求值。
 
 稀疏人工修正位于 `docs/game/relic-zone-validation/human/`。文档站最终显示按 `human > formula` 回退，human 不参与生产图谱或公式路由。
 

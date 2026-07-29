@@ -2,13 +2,16 @@ import { describe, expect, it } from "vitest";
 import type { ExportedRogueDifficultyConditionalRelic } from "@arkrog/arknights-schema/game-data";
 
 import {
+  FormulaZoneId,
   FormulaContext,
+} from "../src/lib/formula/index.js";
+import {
   applyRogueDifficultyToFormulaContext,
   getManualTopicDifficultyEffects,
   routeRogueDifficultyToZones,
   routeSelectedRogueDifficultyToZones,
   type RogueDifficultyForFormula,
-} from "../src/lib/formula/index.js";
+} from "../src/lib/mechanics/index.js";
 
 /** 构造只包含测试所需字段的原始难度。 */
 function difficulty(grade: number, ruleDesc: string): RogueDifficultyForFormula {
@@ -152,7 +155,7 @@ describe("routeRogueDifficultyToZones", () => {
     });
 
     expect(route.classification).toBe("predicted");
-    expect(route.zoneIds).toEqual(["OUTER_ENEMY_MAX_HP"]);
+    expect(route.zoneIds).toEqual([FormulaZoneId.藏品局外敌人最大生命倍率]);
     expect(route.effects[0]).toMatchObject({
       value: 0.3,
       evidencePath: "$.details.rogue_6.difficulties[5].ruleDesc",
@@ -192,12 +195,12 @@ describe("routeRogueDifficultyToZones", () => {
     ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          zoneId: "OUTER_ENEMY_MAX_HP",
+          zoneId: FormulaZoneId.藏品局外敌人最大生命倍率,
           value: -0.4,
           maintenance: "manual",
         }),
         expect.objectContaining({
-          zoneId: "OUTER_ENEMY_ATK",
+          zoneId: FormulaZoneId.藏品局外敌人攻击力倍率,
           value: -0.3,
           maintenance: "manual",
         }),
@@ -218,11 +221,11 @@ describe("applyRogueDifficultyToFormulaContext", () => {
       selectedDifficulty: difficulties[1]!,
     });
 
-    expect(route.zoneIds).toEqual(["OUTER_ENEMY_MAX_HP", "OUTER_ENEMY_ATK"]);
+    expect(route.zoneIds).toEqual([FormulaZoneId.藏品局外敌人最大生命倍率, FormulaZoneId.藏品局外敌人攻击力倍率]);
     expect(route.routes).toHaveLength(2);
   });
 
-  it("条件未确认时保留 mode/grade 藏品贡献但不参与计算", () => {
+  it("条件未确认时保留路由结果但不向公式上下文写入", () => {
     const selected = difficulty(0, "初始生命值上限更高，失败时下次探索获得“特勤任务影像”");
     const link = conditionalRelic();
     const route = routeSelectedRogueDifficultyToZones({
@@ -232,7 +235,7 @@ describe("applyRogueDifficultyToFormulaContext", () => {
       conditionalRelics: [link],
     });
     const context = new FormulaContext();
-    const contributions = applyRogueDifficultyToFormulaContext(context, {
+    applyRogueDifficultyToFormulaContext(context, {
       topicId: "rogue_6",
       difficulties: [selected],
       selectedDifficulty: selected,
@@ -240,14 +243,11 @@ describe("applyRogueDifficultyToFormulaContext", () => {
     });
 
     expect(route.zoneIds).toEqual(
-      expect.arrayContaining(["OUTER_MAX_HP", "OUTER_ATK", "OUTER_CHAR_DEF"]),
+      expect.arrayContaining([FormulaZoneId.局外最大生命倍率, FormulaZoneId.局外攻击力倍率, FormulaZoneId.局外防御力倍率]),
     );
-    expect(context.evaluateZone("OUTER_MAX_HP").value).toBe(1);
-    const conditionalContributions = contributions.filter((entry) =>
-      entry.id.startsWith("difficulty-grant:"),
-    );
-    expect(conditionalContributions.every((entry) => !entry.active)).toBe(true);
-    expect(conditionalContributions[0]?.reason).toContain("需满足条件载体");
+    expect(context.evaluateZone(FormulaZoneId.局外最大生命倍率).value).toBe(1);
+    // BuffContext 只有一个 relic_rune_mul.enemy_max_hp，当前一项来自 0 级人工规则而非未确认藏品。
+    expect(context.getItems(FormulaZoneId.藏品局外敌人最大生命倍率)).toHaveLength(1);
   });
 
   it("用户确认失败条件后才应用特勤任务影像", () => {
@@ -262,9 +262,9 @@ describe("applyRogueDifficultyToFormulaContext", () => {
       enabledConditionalRelicIds: [link.id],
     });
 
-    expect(context.evaluateZone("OUTER_MAX_HP").value).toBeCloseTo(1.4);
-    expect(context.evaluateZone("OUTER_ATK").value).toBeCloseTo(1.4);
-    expect(context.evaluateZone("OUTER_CHAR_DEF").value).toBeCloseTo(1.4);
+    expect(context.evaluateZone(FormulaZoneId.局外最大生命倍率).value).toBeCloseTo(1.4);
+    expect(context.evaluateZone(FormulaZoneId.局外攻击力倍率).value).toBeCloseTo(1.4);
+    expect(context.evaluateZone(FormulaZoneId.局外防御力倍率).value).toBeCloseTo(1.4);
   });
 
   it("上一局遗留支援被选择后将襁褓巨龙写入敌方生命乘区", () => {
@@ -288,8 +288,9 @@ describe("applyRogueDifficultyToFormulaContext", () => {
       enabledConditionalRelicIds: [link.id],
     });
 
-    expect(route.zoneIds).toContain("ENEMY_HP_RELIC");
-    expect(context.evaluateZone("ENEMY_HP_RELIC").value).toBeCloseTo(0.5);
+    expect(route.zoneIds).toContain(FormulaZoneId.藏品局外敌人最大生命倍率);
+    // 3 级人工规则 -10% 与襁褓巨龙 -50% 在来源中的同一局外乘区加算。
+    expect(context.evaluateZone(FormulaZoneId.藏品局外敌人最大生命倍率).value).toBeCloseTo(0.4);
   });
 
   it("按精确难度应用黑流树海 0-3 级人工规则且不向上累计", () => {
@@ -304,19 +305,19 @@ describe("applyRogueDifficultyToFormulaContext", () => {
 
     for (const entry of expected) {
       const context = new FormulaContext();
-      applyRogueDifficultyToFormulaContext(context, {
+      const applied = applyRogueDifficultyToFormulaContext(context, {
         topicId: "rogue_6",
         difficulties,
         selectedDifficulty: difficulties[entry.grade]!,
       });
 
-      expect(context.evaluateZone("OUTER_ENEMY_MAX_HP").value).toBeCloseTo(entry.hp);
-      expect(context.evaluateZone("OUTER_ENEMY_ATK").value).toBeCloseTo(entry.atk);
-      // 难度 0-3 的贡献必须明确标记为人工来源。
-      const manualContributions = context
-        .getContributions("OUTER_ENEMY_MAX_HP")
-        .filter((contribution) => contribution.source?.kind === "manual");
-      expect(manualContributions).toHaveLength(entry.grade <= 3 ? 1 : 0);
+      expect(context.evaluateZone(FormulaZoneId.藏品局外敌人最大生命倍率).value).toBeCloseTo(entry.hp);
+      expect(context.evaluateZone(FormulaZoneId.藏品局外敌人攻击力倍率).value).toBeCloseTo(entry.atk);
+      // 难度 0-3 的人工规则证据保留在写入记录，不进入最小 FormulaItem。
+      const manualPlacements = applied.filter((placement) =>
+        placement.route.ruleId.startsWith("manual-topic-"),
+      );
+      expect(manualPlacements).toHaveLength(entry.grade <= 3 ? 2 : 0);
     }
   });
 
@@ -327,21 +328,17 @@ describe("applyRogueDifficultyToFormulaContext", () => {
       difficulty(11, "领袖敌人受到的伤害降低20％"),
     ];
     const context = new FormulaContext();
-    const contributions = applyRogueDifficultyToFormulaContext(context, {
+    const placements = applyRogueDifficultyToFormulaContext(context, {
       topicId: "rogue_6",
       difficulties,
       selectedDifficulty: difficulties[2]!,
       activation: { enemy: { id: "enemy_test", levelType: "BOSS" } },
     });
 
-    expect(context.evaluateZone("OUTER_ENEMY_MAX_HP").value).toBeCloseTo(1.3);
-    expect(context.evaluateZone("OUTER_ENEMY_ATK").value).toBeCloseTo(1.15);
-    expect(
-      context.evaluateZone("OUTER_ENEMY_DAMAGE_RESISTANCE", {
-        damageType: "physical",
-      }).value,
-    ).toBeCloseTo(0.2);
-    expect(contributions.every((entry) => entry.source?.kind === "difficulty")).toBe(true);
+    expect(context.evaluateZone(FormulaZoneId.藏品局外敌人最大生命倍率).value).toBeCloseTo(1.3);
+    expect(context.evaluateZone(FormulaZoneId.藏品局外敌人攻击力倍率).value).toBeCloseTo(1.15);
+    expect(context.evaluateZone(FormulaZoneId.藏品局外敌人减伤最大值).value).toBeCloseTo(0.2);
+    expect(placements.every((entry) => entry.route.ruleId.length > 0)).toBe(true);
   });
 
   it("按目标类型停用不适用于普通敌人的精英和领袖贡献", () => {
@@ -358,12 +355,10 @@ describe("applyRogueDifficultyToFormulaContext", () => {
       activation: { enemy: { id: "enemy_test", levelType: "NORMAL" } },
     });
 
-    expect(context.evaluateZone("OUTER_ENEMY_MAX_HP").value).toBeCloseTo(1.3);
-    expect(context.evaluateZone("OUTER_ENEMY_ATK").value).toBe(1);
-    expect(context.evaluateZone("OUTER_ENEMY_DAMAGE_RESISTANCE").value).toBe(0);
-    expect(
-      context.getContributions("OUTER_ENEMY_ATK", { includeInactive: true })[0]?.reason,
-    ).toContain("当前敌人不是精英或领袖");
+    expect(context.evaluateZone(FormulaZoneId.藏品局外敌人最大生命倍率).value).toBeCloseTo(1.3);
+    expect(context.evaluateZone(FormulaZoneId.藏品局外敌人攻击力倍率).value).toBe(1);
+    expect(context.evaluateZone(FormulaZoneId.藏品局外敌人减伤最大值).value).toBe(0);
+    expect(context.getItems(FormulaZoneId.藏品局外敌人攻击力倍率)).toHaveLength(0);
   });
 
   it("将同一难度体系的多级局外减伤累计后写入 max 乘区", () => {
@@ -380,11 +375,7 @@ describe("applyRogueDifficultyToFormulaContext", () => {
       activation: { enemy: { id: "enemy_test", levelType: "BOSS" } },
     });
 
-    expect(
-      context.evaluateZone("OUTER_ENEMY_DAMAGE_RESISTANCE", {
-        damageType: "magical",
-      }).value,
-    ).toBeCloseTo(0.15);
+    expect(context.evaluateZone(FormulaZoneId.藏品局外敌人减伤最大值).value).toBeCloseTo(0.15);
   });
 
   it("缺少登场时间时保守停用限时难度效果", () => {
@@ -400,7 +391,7 @@ describe("applyRogueDifficultyToFormulaContext", () => {
       activation: { enemy: { id: "enemy_test", levelType: "ELITE" } },
     });
 
-    expect(context.evaluateZone("OUTER_ENEMY_ATK").value).toBe(1);
-    expect(context.evaluateZone("OUTER_ENEMY_DAMAGE_RESISTANCE").value).toBe(0);
+    expect(context.evaluateZone(FormulaZoneId.藏品局外敌人攻击力倍率).value).toBe(1);
+    expect(context.evaluateZone(FormulaZoneId.藏品局外敌人减伤最大值).value).toBe(0);
   });
 });

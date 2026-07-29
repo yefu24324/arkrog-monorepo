@@ -9,13 +9,18 @@ import {
   type BuffTemplateEntry,
   type ExportedRelicEffect,
   type ExportedZonePrediction,
+  type MechanicIndex,
   type RelicZoneExport,
   type TopicDetailForClassify,
 } from "../lib/classify/index.js";
 import {
+  FormulaZoneId,
+  type FormulaWritableZoneId,
+} from "../lib/formula/formula-book.js";
+import {
   buildFormulaRelicZoneValidationArtifact,
   type RelicZoneValidationArtifact,
-} from "../lib/formula/index.js";
+} from "../lib/mechanics/index.js";
 import { resolveRepositoryPaths, toRepositoryPath } from "./paths.js";
 import { runCypher } from "./query.js";
 
@@ -30,10 +35,8 @@ interface GraphEffectRow {
   events: string;
   components: string;
   zoneId: string;
-  symbol: string;
-  zoneName: string;
-  formula: string;
   status: string;
+  confidence: number;
   reason: string;
   evidencePath: string;
   ruleId: string;
@@ -43,7 +46,7 @@ interface GraphEffectRow {
 export interface RelicZoneValidationExportResult {
   /** Kuzu 图谱预测产物。 */
   graphOutputPath: string;
-  /** 公式贡献函数产物。 */
+  /** 公式项写入函数产物。 */
   formulaOutputPath: string;
   /** RELIC 藏品数量。 */
   itemCount: number;
@@ -82,10 +85,8 @@ function groupGraphRows(rows: Record<string, unknown>[]): Map<string, GraphEffec
       events: text(row.events),
       components: text(row.components),
       zoneId: text(row.zoneId),
-      symbol: text(row.symbol),
-      zoneName: text(row.zoneName),
-      formula: text(row.formula),
       status: text(row.status),
+      confidence: Number(row.confidence ?? 0),
       reason: text(row.reason),
       evidencePath: text(row.evidencePath),
       ruleId: text(row.ruleId),
@@ -95,14 +96,31 @@ function groupGraphRows(rows: Record<string, unknown>[]): Map<string, GraphEffec
   return grouped;
 }
 
-/** 将图中的一条映射边转换为统一 JSON 预测结构。 */
-function exportPrediction(row: GraphEffectRow): ExportedZonePrediction {
+/** 当前攻击力版本允许出现在图谱校验产物中的真实可写 zone。 */
+const ATTACK_ZONE_IDS = new Set<FormulaWritableZoneId>([
+  FormulaZoneId.operator_base_atk,
+  FormulaZoneId.operator_out_atk_add,
+  FormulaZoneId.operator_out_atk_mul,
+  FormulaZoneId.operator_in_atk_add,
+  FormulaZoneId.operator_in_atk_mul,
+  FormulaZoneId.operator_final_atk_add,
+]);
+
+/** 判断 Kuzu 松散字符串是否仍属于当前 FormulaBook 的攻击力可写 zone。 */
+function isAttackZoneId(value: string): value is FormulaWritableZoneId {
+  return ATTACK_ZONE_IDS.has(value as FormulaWritableZoneId);
+}
+
+/** 将图中的一条映射边转换为当前攻击力 JSON 预测结构。 */
+function exportPrediction(row: GraphEffectRow): ExportedZonePrediction | null {
+  if (!isAttackZoneId(row.zoneId)) return null;
+  const status = row.status === "verified" || row.status === "inferred"
+    ? row.status
+    : "unknown";
   return {
-    id: row.zoneId,
-    symbol: row.symbol || row.zoneId,
-    name: row.zoneName || row.zoneId,
-    formula: row.formula,
-    status: row.status,
+    zoneId: row.zoneId,
+    status,
+    confidence: Number.isFinite(row.confidence) ? row.confidence : 0,
     reason: row.reason,
     ruleId: row.ruleId,
     evidencePaths: splitValues(row.evidencePath),
@@ -121,13 +139,15 @@ function buildGraphArtifact(
   let notApplicableEffectCount = 0;
 
   const items = classified.items.map((item) => {
-    const itemZones = new Map<string, { id: string; symbol: string; name: string }>();
+    const itemZones = new Set<FormulaWritableZoneId>();
     const itemConditions = new Set<string>();
     const effects: ExportedRelicEffect[] = item.effects.map((effect) => {
       const graphEffects = graphByEffect.get(effect.effectId) ?? [];
       const firstGraph = graphEffects[0];
       const zoneRows = graphEffects.filter((row) => row.zoneId);
-      const predictions = zoneRows.map(exportPrediction);
+      const predictions = zoneRows
+        .map(exportPrediction)
+        .filter((prediction): prediction is ExportedZonePrediction => prediction !== null);
       const mechanicEvents = splitValues(firstGraph?.events ?? "");
       const mechanicComponents = splitValues(firstGraph?.components ?? "");
       const condition = deriveCondition(mechanicEvents, effect.blackboard);
@@ -141,11 +161,7 @@ function buildGraphArtifact(
 
       itemConditions.add(condition);
       for (const prediction of predictions) {
-        itemZones.set(prediction.id, {
-          id: prediction.id,
-          symbol: prediction.symbol,
-          name: prediction.name,
-        });
+        itemZones.add(prediction.zoneId);
       }
       if (evidenceStatuses.includes("verified")) verifiedEffectCount += 1;
       if (evidenceStatuses.includes("inferred")) inferredEffectCount += 1;
@@ -174,7 +190,7 @@ function buildGraphArtifact(
     return {
       ...item,
       conditions: [...itemConditions],
-      zones: [...itemZones.values()],
+      zones: [...itemZones],
       effects,
     };
   });
@@ -206,7 +222,10 @@ function buildGraphArtifact(
 }
 
 /** 读取主题表与战斗模板，并构建纯 TS 现场分类基线。 */
-async function loadClassifiedTopic(topicId: string): Promise<RelicZoneExport> {
+async function loadClassifiedTopic(topicId: string): Promise<{
+  classified: RelicZoneExport;
+  mechanicIndex: MechanicIndex;
+}> {
   const paths = resolveRepositoryPaths();
   const tablePath = path.join(paths.gameData, "excel", "roguelike_topic_table.json");
   const templatePath = path.join(paths.gameData, "battle", "buff_template_data.json");
@@ -217,12 +236,16 @@ async function loadClassifiedTopic(topicId: string): Promise<RelicZoneExport> {
     string,
     BuffTemplateEntry
   >;
-  return buildRelicZoneTable({
-    topicId,
-    topicName: data.topics[topicId]?.name ?? topicId,
-    detail,
-    mechanicIndex: buildMechanicIndex(buffTemplateData),
-  });
+  const mechanicIndex = buildMechanicIndex(buffTemplateData);
+  return {
+    classified: buildRelicZoneTable({
+      topicId,
+      topicName: data.topics[topicId]?.name ?? topicId,
+      detail,
+      mechanicIndex,
+    }),
+    mechanicIndex,
+  };
 }
 
 /** 查询指定主题的全部 Effect → DamageZone 图谱边与关联事实。 */
@@ -239,8 +262,8 @@ async function readGraphPredictionRows(
             e.parameters AS parameters, e.jsonPath AS jsonPath, e.sourceKind AS sourceKind,
             mechanic.name AS mechanic, mechanic.events AS events,
             mechanic.componentTypes AS components, z.id AS zoneId,
-            z.symbol AS symbol, z.name AS zoneName, z.formula AS formula,
-            mapping.status AS status, mapping.reason AS reason,
+            mapping.status AS status, mapping.confidence AS confidence,
+            mapping.reason AS reason,
             mapping.evidencePath AS evidencePath, mapping.ruleId AS ruleId
      ORDER BY e.jsonPath, z.stage`,
     databaseOverride,
@@ -255,12 +278,12 @@ export async function exportRelicZoneJson(
 ): Promise<RelicZoneValidationExportResult> {
   if (!/^rogue_\d+$/.test(topicId)) throw new Error(`主题 ID 格式无效：${topicId}`);
   const paths = resolveRepositoryPaths(databaseOverride);
-  const classified = await loadClassifiedTopic(topicId);
+  const { classified, mechanicIndex } = await loadClassifiedTopic(topicId);
   const graphArtifact = buildGraphArtifact(
     classified,
     await readGraphPredictionRows(topicId, databaseOverride),
   );
-  const formulaArtifact = buildFormulaRelicZoneValidationArtifact(classified);
+  const formulaArtifact = buildFormulaRelicZoneValidationArtifact(classified, mechanicIndex);
   const validationRoot = path.join(paths.root, "docs", "game", "relic-zone-validation");
   const graphOutputPath = path.join(validationRoot, "graph", `${topicId}.json`);
   const formulaOutputPath = path.join(validationRoot, "formula", `${topicId}.json`);

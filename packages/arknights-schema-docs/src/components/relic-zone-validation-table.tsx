@@ -8,12 +8,67 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Search, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import type {
-  RelicZoneEffect,
-  RelicZoneItem,
-  RelicZoneRef,
-  RelicZoneTableData,
-} from '@/components/relic-zone-table';
+
+/** 当前 FormulaBook 攻击力乘区的文档展示引用。 */
+interface RelicZoneRef {
+  id: string;
+  name: string;
+}
+
+/** 当前攻击力校验产物中的单条乘区预测及其证据。 */
+interface RelicZonePrediction {
+  zoneId: string;
+  ruleId: string;
+  reason: string;
+  status: string;
+  confidence: number;
+  evidencePaths: string[];
+}
+
+/** 校验产物中的原始黑板参数。 */
+interface RelicZoneBlackboardEntry {
+  key: string;
+  value: number;
+  valueStr: string | null;
+}
+
+/** 当前攻击力校验产物中的单个 buff 效果。 */
+interface RelicZoneEffect {
+  effectId: string;
+  key: string;
+  blackboard: RelicZoneBlackboardEntry[];
+  predictions: RelicZonePrediction[];
+  jsonPath: string;
+}
+
+/** 当前攻击力校验产物中的藏品记录。 */
+interface RelicZoneItem {
+  id: string;
+  name: string;
+  usage: string | null;
+  zones: string[];
+  effects: RelicZoneEffect[];
+}
+
+/** graph/formula 校验 JSON 的页面读取契约。 */
+interface RelicZoneTableData {
+  topic: { id: string; name: string };
+  items: RelicZoneItem[];
+}
+
+/** 公式簿 JSON 中递归节点的最小读取结构。 */
+interface FormulaBookNode {
+  comment?: string;
+  expression?: FormulaBookNode;
+  id?: string;
+  operands?: FormulaBookNode[];
+  zoneId?: string;
+}
+
+/** 公式簿 JSON 只暴露 operator_final_atk 根公式。 */
+interface FormulaBookPayload {
+  formula: FormulaBookNode;
+}
 
 /** 稀疏 human 文件中的单 effect 修正。 */
 interface HumanEffectOverride {
@@ -59,22 +114,32 @@ interface RelicZoneValidationTableProps {
 }
 
 /** 将乘区数组归一成稳定 ID 集合字符串，供对照判断。 */
-function zoneSignature(zones: readonly RelicZoneRef[]): string {
-  return [...new Set(zones.map((zone) => zone.id))].sort().join('|');
+function zoneSignature(zones: readonly string[]): string {
+  return [...new Set(zones)].sort().join('|');
 }
 
-/** 建立主题内乘区 ID 到名称/符号的索引。 */
-function buildZoneIndex(...datasets: Array<RelicZoneTableData | null>): Map<string, RelicZoneRef> {
+/** 从 operator_final_atk 递归公式中收集 FormulaZoneId 的中文注释。 */
+function collectFormulaZoneComments(node: FormulaBookNode, target: Record<string, string> = {}): Record<string, string> {
+  const id = node.zoneId ?? node.id;
+  if (id && node.comment) target[id] = node.comment;
+  if (node.expression) collectFormulaZoneComments(node.expression, target);
+  for (const operand of node.operands ?? []) collectFormulaZoneComments(operand, target);
+  return target;
+}
+
+/** 建立主题内乘区 ID 到 FormulaBook 中文注释的索引。 */
+function buildZoneIndex(comments: Readonly<Record<string, string>>, ...datasets: Array<RelicZoneTableData | null>): Map<string, RelicZoneRef> {
   const zones = new Map<string, RelicZoneRef>();
   for (const data of datasets) {
     for (const item of data?.items ?? []) {
-      for (const zone of item.zones) zones.set(zone.id, zone);
+      for (const zoneId of item.zones) {
+        zones.set(zoneId, { id: zoneId, name: comments[zoneId] ?? zoneId });
+      }
       for (const effect of item.effects) {
         for (const prediction of effect.predictions) {
-          zones.set(prediction.id, {
-            id: prediction.id,
-            symbol: prediction.symbol,
-            name: prediction.name,
+          zones.set(prediction.zoneId, {
+            id: prediction.zoneId,
+            name: comments[prediction.zoneId] ?? prediction.zoneId,
           });
         }
       }
@@ -86,7 +151,7 @@ function buildZoneIndex(...datasets: Array<RelicZoneTableData | null>): Map<stri
 /** 将 human 的乘区 ID 转为可展示引用；未知 ID 保留原文而不静默丢弃。 */
 function resolveZoneIds(ids: readonly string[], zoneIndex: ReadonlyMap<string, RelicZoneRef>): RelicZoneRef[] {
   return [...new Set(ids)].map(
-    (id) => zoneIndex.get(id) ?? { id, symbol: id, name: '人工指定乘区' },
+    (id) => zoneIndex.get(id) ?? { id, name: '未知攻击力乘区' },
   );
 }
 
@@ -99,9 +164,8 @@ function resolveEffectZones(
   const override = human?.effects?.find((entry) => entry.effectId === effect.effectId);
   if (override) return resolveZoneIds(override.zones, zoneIndex);
   return effect.predictions.map((prediction) => ({
-    id: prediction.id,
-    symbol: prediction.symbol,
-    name: prediction.name,
+    id: prediction.zoneId,
+    name: zoneIndex.get(prediction.zoneId)?.name ?? prediction.zoneId,
   }));
 }
 
@@ -130,8 +194,7 @@ function ZoneBadges({ zones, empty = '—' }: { zones: RelicZoneRef[]; empty?: s
           title={`${zone.name}（${zone.id}）`}
           className="inline-flex items-center gap-1 rounded-md border bg-fd-muted/40 px-1.5 py-0.5 text-xs"
         >
-          <span className="font-mono font-medium text-fd-primary">{zone.symbol}</span>
-          <span className="text-fd-muted-foreground">{zone.name}</span>
+          <span className="font-medium text-fd-primary">{zone.name}</span>
         </span>
       ))}
     </div>
@@ -139,11 +202,10 @@ function ZoneBadges({ zones, empty = '—' }: { zones: RelicZoneRef[]; empty?: s
 }
 
 /** 将 effect 预测转换为乘区引用。 */
-function effectPredictionZones(effect: RelicZoneEffect | undefined): RelicZoneRef[] {
+function effectPredictionZones(effect: RelicZoneEffect | undefined, zoneIndex: ReadonlyMap<string, RelicZoneRef>): RelicZoneRef[] {
   return (effect?.predictions ?? []).map((prediction) => ({
-    id: prediction.id,
-    symbol: prediction.symbol,
-    name: prediction.name,
+    id: prediction.zoneId,
+    name: zoneIndex.get(prediction.zoneId)?.name ?? prediction.zoneId,
   }));
 }
 
@@ -177,11 +239,11 @@ function EffectComparison({ row, zoneIndex }: { row: ValidationRow; zoneIndex: R
             <div className="grid gap-3 p-3 md:grid-cols-3">
               <div>
                 <p className="mb-1 text-xs font-medium text-fd-muted-foreground">Graph</p>
-                <ZoneBadges zones={effectPredictionZones(graphEffect)} />
+                <ZoneBadges zones={effectPredictionZones(graphEffect, zoneIndex)} />
               </div>
               <div>
                 <p className="mb-1 text-xs font-medium text-fd-muted-foreground">Formula</p>
-                <ZoneBadges zones={effectPredictionZones(formulaEffect)} />
+                <ZoneBadges zones={effectPredictionZones(formulaEffect, zoneIndex)} />
               </div>
               <div>
                 <p className="mb-1 text-xs font-medium text-fd-muted-foreground">
@@ -221,6 +283,7 @@ export function RelicZoneValidationTable({ topicId, className }: RelicZoneValida
   const [graph, setGraph] = useState<RelicZoneTableData | null>(null);
   const [formula, setFormula] = useState<RelicZoneTableData | null>(null);
   const [human, setHuman] = useState<HumanRelicZoneArtifact | null>(null);
+  const [zoneComments, setZoneComments] = useState<Record<string, string>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<ValidationFilter>('all');
@@ -229,20 +292,25 @@ export function RelicZoneValidationTable({ topicId, className }: RelicZoneValida
   useEffect(() => {
     let cancelled = false;
     // 三层文件独立拉取，确保页面能明确暴露任一缺失或格式错误。
-    void Promise.all(
-      ['graph', 'formula', 'human'].map(async (layer) => {
+    void Promise.all([
+      ...['graph', 'formula', 'human'].map(async (layer) => {
         const response = await fetch(`/data/relic-zone-validation/${layer}/${topicId}.json`);
         if (!response.ok) throw new Error(`${layer}: HTTP ${response.status}`);
         return response.json() as Promise<unknown>;
       }),
-    )
-      .then(([graphData, formulaData, humanData]) => {
+      fetch('/data/formula-book.json').then(async (response) => {
+        if (!response.ok) throw new Error(`formula-book: HTTP ${response.status}`);
+        return response.json() as Promise<unknown>;
+      }),
+    ])
+      .then(([graphData, formulaData, humanData, formulaBookData]) => {
         if (cancelled) return;
         // 请求成功后再清理旧错误，避免 effect 内同步 setState 触发级联渲染。
         setLoadError(null);
         setGraph(graphData as RelicZoneTableData);
         setFormula(formulaData as RelicZoneTableData);
         setHuman(humanData as HumanRelicZoneArtifact);
+        setZoneComments(collectFormulaZoneComments((formulaBookData as FormulaBookPayload).formula));
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -253,7 +321,10 @@ export function RelicZoneValidationTable({ topicId, className }: RelicZoneValida
     };
   }, [topicId]);
 
-  const zoneIndex = useMemo(() => buildZoneIndex(graph, formula), [graph, formula]);
+  const zoneIndex = useMemo(
+    () => buildZoneIndex(zoneComments, graph, formula),
+    [formula, graph, zoneComments],
+  );
   const rows = useMemo<ValidationRow[]>(() => {
     if (!graph || !formula || !human) return [];
     const graphById = new Map(graph.items.map((item) => [item.id, item]));
@@ -272,7 +343,7 @@ export function RelicZoneValidationTable({ topicId, className }: RelicZoneValida
         formula: formulaItem,
         human: humanItem,
         effectiveZones,
-        graphMatchesEffective: zoneSignature(graphItem?.zones ?? []) === zoneSignature(effectiveZones),
+        graphMatchesEffective: zoneSignature(graphItem?.zones ?? []) === zoneSignature(effectiveZones.map((zone) => zone.id)),
         formulaMatchesGraph: zoneSignature(graphItem?.zones ?? []) === zoneSignature(formulaItem?.zones ?? []),
       };
     });
@@ -341,7 +412,8 @@ export function RelicZoneValidationTable({ topicId, className }: RelicZoneValida
 
       <div className="overflow-hidden rounded-2xl border bg-fd-card">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[70rem] border-collapse text-sm">
+          {/* 校验产物允许跨单元格拖拽框选，展开按钮保持独立交互。 */}
+          <table className="w-full min-w-[70rem] border-collapse text-sm select-text selection:bg-fd-primary/25 selection:text-fd-foreground">
             <thead><tr className="border-b bg-fd-muted/40 text-left text-fd-muted-foreground"><th className="w-10 px-3 py-2.5" /><th className="w-[18%] px-3 py-2.5 font-medium">藏品</th><th className="w-[22%] px-3 py-2.5 font-medium">Graph</th><th className="w-[22%] px-3 py-2.5 font-medium">Formula</th><th className="w-[22%] px-3 py-2.5 font-medium">最终 Human &gt; Formula</th><th className="px-3 py-2.5 font-medium">校验</th></tr></thead>
             <tbody>
               {filtered.map((row) => {
@@ -364,10 +436,10 @@ function FragmentRow({ row, expanded, zoneIndex, onToggle }: { row: ValidationRo
   return (
     <>
       <tr className={cn('border-b align-top hover:bg-fd-accent/30', expanded && 'bg-fd-accent/20')}>
-        <td className="px-3 py-3"><button type="button" onClick={onToggle} aria-label={expanded ? `收起 ${row.base.name}` : `展开 ${row.base.name}`} className="rounded p-1 text-fd-muted-foreground hover:bg-fd-accent"><ChevronDown className={cn('size-4 transition-transform', expanded && 'rotate-180')} /></button></td>
-        <td className="px-3 py-3"><button type="button" onClick={onToggle} className="w-full text-left"><span className="font-medium">{row.base.name}</span><code className="mt-1 block text-[0.7rem] text-fd-muted-foreground">{row.base.id}</code></button></td>
-        <td className="px-3 py-3"><ZoneBadges zones={row.graph?.zones ?? []} /></td>
-        <td className="px-3 py-3"><ZoneBadges zones={row.formula?.zones ?? []} /></td>
+        <td className="select-none px-3 py-3"><button type="button" onClick={onToggle} aria-label={expanded ? `收起 ${row.base.name}` : `展开 ${row.base.name}`} className="select-none rounded p-1 text-fd-muted-foreground hover:bg-fd-accent"><ChevronDown className={cn('size-4 transition-transform', expanded && 'rotate-180')} /></button></td>
+        <td className="cursor-text px-3 py-3"><div className="w-full select-text text-left"><span className="font-medium">{row.base.name}</span><code className="mt-1 block text-[0.7rem] text-fd-muted-foreground">{row.base.id}</code></div></td>
+        <td className="px-3 py-3"><ZoneBadges zones={resolveZoneIds(row.graph?.zones ?? [], zoneIndex)} /></td>
+        <td className="px-3 py-3"><ZoneBadges zones={resolveZoneIds(row.formula?.zones ?? [], zoneIndex)} /></td>
         <td className="px-3 py-3"><ZoneBadges zones={row.effectiveZones} /><p className="mt-2 text-xs text-fd-muted-foreground">来源：{row.human ? `Human · ${row.human.reviewer}` : 'Formula fallback'}</p></td>
         <td className="px-3 py-3"><span className={cn('inline-flex rounded-full border px-2 py-1 text-xs', row.graphMatchesEffective ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300')}>{row.graphMatchesEffective ? '一致' : '有差异'}</span>{!row.formulaMatchesGraph ? <p className="mt-2 text-xs text-fd-muted-foreground">graph ≠ formula</p> : null}</td>
       </tr>

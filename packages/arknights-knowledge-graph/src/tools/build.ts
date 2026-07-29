@@ -3,21 +3,16 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
 import { RoguelikeTopicTableSchema } from "@arkrog/arknights-schema";
-import { collectDifficultyConditionalRelics } from "@arkrog/arknights-schema/game-data";
 import type { Connection, KuzuValue } from "kuzu";
 
-import { DAMAGE_ZONES } from "../lib/domain/damage-zones.js";
-import { ROGUE_DIFFICULTY_SEMANTIC_RULES } from "../lib/domain/difficulty-rules.js";
 import {
   ENGINE_SEMANTIC_RULES,
   extractMechanicActionFacts,
   predictEngineZones,
   type MechanicActionFact,
 } from "../lib/domain/engine-rules.js";
-import {
-  conditionalRelicMatchesDifficulty,
-  routeRogueDifficultyToZones,
-} from "../lib/formula/difficulty-programs.js";
+import { FormulaZoneExpression } from "../lib/formula/ast.js";
+import { FormulaBook } from "../lib/formula/formula-book.js";
 import { closeGraph, executeBatch, openGraph } from "./graph/database.js";
 import { createGraphSchema } from "./graph/schema.js";
 import { resolveRepositoryPaths, toRepositoryPath } from "./paths.js";
@@ -227,7 +222,8 @@ async function collectBattleMechanics(
 function parameterMap(
   blackboard: Array<{ key: string; value: number; valueStr: string | null }>,
 ): ReadonlyMap<string, number | string | null> {
-  return new Map(blackboard.map((parameter) => [parameter.key, parameter.valueStr ?? parameter.value]));
+  // GameData 存在带尾随空格的黑板键，进入统一语义规则前先规范化。
+  return new Map(blackboard.map((parameter) => [parameter.key.trim(), parameter.valueStr ?? parameter.value]));
 }
 
 /** 生成便于终端阅读的黑板摘要。 */
@@ -317,68 +313,7 @@ async function collectRoguelikeKnowledge(
   const fieldIds = new Set(dataset.fields.map((field) => String(field.id)));
 
   for (const [topicId, detail] of Object.entries(data.details)) {
-    // 难度原始描述先通过与 formula 共用的版本化规则路由，再把事实与结论分别写入图谱。
-    detail.difficulties.forEach((difficulty, difficultyIndex) => {
-      const route = routeRogueDifficultyToZones({ topicId, difficulty, difficultyIndex });
-      const difficultyId = `difficulty:${topicId}:${difficulty.modeDifficulty}:${difficulty.grade}`;
-      dataset.difficulties.push({
-        id: difficultyId,
-        topic: topicId,
-        modeDifficulty: difficulty.modeDifficulty,
-        grade: BigInt(difficulty.grade),
-        name: difficulty.name,
-        ruleDesc: difficulty.ruleDesc,
-        classification: route.classification,
-        unclassifiedReason: route.unclassifiedReason ?? "",
-        jsonPath: route.jsonPath,
-      });
-      dataset.sourceContainsDifficulty.push({ from: sourceId, to: difficultyId });
-      route.effects.forEach((effect) => {
-        dataset.difficultyEffects.push({
-          id: effect.effectId,
-          matchedText: effect.matchedText,
-          // Kuzu 0.11 Windows 驱动会把整数 number 的位模式误当 DOUBLE；传十进制文本并在 Cypher 内转换。
-          numericText: String(effect.value),
-          target: effect.target,
-          damageTypes: effect.damageTypes?.join("|") ?? "",
-          evidenceKind: effect.evidenceKind,
-          jsonPath: effect.evidencePath,
-        });
-        dataset.difficultyHasEffect.push({ from: difficultyId, to: effect.effectId });
-        dataset.difficultyEffectPredictedBy.push({ from: effect.effectId, to: effect.rule.id });
-        dataset.difficultyEffectEntersZone.push({
-          from: effect.effectId,
-          to: effect.zoneId,
-          ruleId: effect.rule.id,
-          status: effect.rule.status,
-          confidence: effect.rule.confidence,
-          reason: effect.rule.description,
-          evidencePath: effect.evidencePath,
-        });
-      });
-    });
-
-    // 难度条件藏品与遗留支援形成 Difficulty -> Item 候选事实边，目标 buffs 继续走既有图谱分类。
-    for (const link of collectDifficultyConditionalRelics(topicId, detail)) {
-      const matchingDifficulties = detail.difficulties.filter((difficulty) =>
-        conditionalRelicMatchesDifficulty(link, difficulty),
-      );
-      if (link.kind === "MODE_GRADE_GRANT" && matchingDifficulties.length === 0) {
-        throw new Error(`难度条件藏品未命中原始难度：${topicId}/${link.id}`);
-      }
-      for (const difficulty of matchingDifficulties) {
-        dataset.difficultyHasConditionalItem.push({
-          from: `difficulty:${topicId}:${difficulty.modeDifficulty}:${difficulty.grade}`,
-          to: `item:${topicId}:${link.targetId}`,
-          kind: link.kind,
-          sourceItemId: link.sourceId,
-          choiceId: link.choiceId ?? "",
-          buffIndex: BigInt(link.buffIndex),
-          evidencePath: link.evidencePaths.join(" | "),
-        });
-      }
-    }
-
+    // 当前图谱版本只导入藏品攻击力事实；肉鸽难度等待后续按新 FormulaBook 单独重构。
     const itemIds = new Set<string>();
     for (const [rawId, item] of Object.entries(detail.items)) {
       const id = `item:${topicId}:${rawId}`;
@@ -438,9 +373,19 @@ async function collectRoguelikeKnowledge(
   }
 }
 
-/** 添加公式乘区、语义规则以及兼容字段映射。 */
+/** 添加 FormulaBook 真实可写乘区、攻击力语义规则以及字段映射。 */
 function collectDomainKnowledge(dataset: GraphDataset): void {
-  DAMAGE_ZONES.forEach((zone) => dataset.zones.push({ ...zone, stage: BigInt(zone.stage) }));
+  const writableZones = Object.values(new FormulaBook().zones)
+    .filter((zone): zone is FormulaZoneExpression => zone instanceof FormulaZoneExpression);
+  writableZones.forEach((zone, index) => dataset.zones.push({
+    id: zone.zoneId,
+    // 图谱关系只依赖 FormulaBook ID；中文展示由 docs 从同一枚举注释读取。
+    symbol: zone.zoneId,
+    name: zone.zoneId,
+    stage: BigInt(index),
+    stacking: zone.operator,
+    formula: "",
+  }));
   const fieldIds = new Set<string>();
   for (const rule of ENGINE_SEMANTIC_RULES) {
     dataset.semanticRules.push({
@@ -469,19 +414,6 @@ function collectDomainKnowledge(dataset: GraphDataset): void {
         evidencePath: `packages/arknights-knowledge-graph/src/lib/domain/engine-rules.ts#${rule.id}`,
       });
     }
-  }
-  // 难度规则进入同一 SemanticRule / DamageZone 模型，保证 Kuzu 与 formula 不维护第二份结论。
-  for (const rule of ROGUE_DIFFICULTY_SEMANTIC_RULES) {
-    dataset.semanticRules.push({
-      id: rule.id,
-      version: BigInt(rule.version),
-      name: rule.matchedText,
-      description: rule.description,
-      zoneId: rule.zoneId,
-      status: rule.status,
-      confidence: rule.confidence,
-    });
-    dataset.ruleTargetsZone.push({ from: rule.id, to: rule.zoneId });
   }
 }
 

@@ -1,208 +1,254 @@
-import type { FormulaZoneId } from "../domain/damage-zones.js";
+import type { FormulaZoneId } from "./formula-book.js";
 
-/** 公式当前计算的伤害类型，用于筛选只对特定伤害生效的贡献项。 */
-export type FormulaDamageType = "physical" | "magical" | "pure" | "elemental";
+/** 公式 AST 支持的全部运算。 */
+export type FormulaOperator =
+  | "add"
+  | "subtract"
+  | "multiply"
+  | "divide"
+  | "max"
+  | "min"
+  | "sum"
+  | "union"
+  | "product"
+  | "product-one-plus"
+  | "percent-plus";
 
-/** 公式 AST 支持的稳定输入 ID。 */
-export type FormulaInputId =
-  | "ATK0"
-  | "CHAR_HP0"
-  | "CHAR_DEF0"
-  | "CHAR_RES0"
-  | "DEPLOY_COST0"
-  | "INITIAL_DP0"
-  | "BLOCK_COUNT0"
-  | "INITIAL_SP0"
-  | "SP_COST0"
-  | "SP_RECOVERY_PER_SECOND0"
-  | "ENEMY_ATK0"
-  | "ENEMY_ATTACK_SPEED0"
-  | "ENEMY_MOVE_SPEED0"
-  | "DEPLOY_LIMIT0"
-  | "DEF0"
-  | "RES0"
-  | "HP0"
-  | "PHYSICAL_ATTACK_SCALE"
-  | "MAGICAL_ATTACK_SCALE"
-  | "PURE_ATTACK_SCALE"
-  | "PHYSICAL_MIN_DAMAGE_RATIO"
-  | "MAGICAL_MIN_DAMAGE_RATIO"
-  | "RAW_ELEMENTAL_DAMAGE"
-  | "RAW_ELEMENTAL_IMPAIRMENT"
-  | "RAW_INCOMING_DAMAGE"
-  | "ENEMY_EP_RESISTANCE0"
-  | "ENEMY_EP_DAMAGE_RESISTANCE0"
-  | "BASE_ATTACK_INTERVAL";
+/** 所有可独立计算的公式节点抽象基类。 */
+export abstract class FormulaExpressionNode {
+  /** 节点判别字段，供递归遍历和 UI 使用。 */
+  abstract readonly kind: "item" | "operation" | "zone" | "formula";
 
-/** 公式 AST 的常量节点。 */
-export interface ConstantExpression {
-  /** 节点判别字段。 */
-  kind: "constant";
-  /** 常量值。 */
-  value: number;
+  /** 直接使用当前 FormulaBook 对象图中的 item 计算节点数值。 */
+  abstract calculate(): number;
+
+  /** 创建不共享可变 item 数组的节点副本。 */
+  abstract clone(): FormulaExpressionNode;
 }
 
-/** 公式 AST 的外部输入节点。 */
-export interface InputExpression {
-  /** 节点判别字段。 */
-  kind: "input";
-  /** 输入的稳定 ID。 */
-  inputId: FormulaInputId;
-  /** 人类可读符号。 */
-  symbol: string;
-  /** 输入含义说明。 */
-  tooltip: string;
+/** 公式树中的固定数值或运行时贡献项。 */
+export class FormulaItemExpression extends FormulaExpressionNode {
+  readonly kind = "item" as const;
+
+  constructor(
+    /** 用于说明数值来源的简短提示。 */
+    public readonly tooltip: string,
+    /** 已按目标乘区语义规范化的数值。 */
+    public readonly value: number,
+  ) {
+    super();
+  }
+
+  /** item 直接返回自身数值。 */
+  calculate(): number {
+    return this.value;
+  }
+
+  /** 创建独立 item 副本。 */
+  clone(): FormulaItemExpression {
+    return new FormulaItemExpression(this.tooltip, this.value);
+  }
 }
 
-/** 公式 AST 的乘区引用节点。 */
-export interface ZoneExpression {
-  /** 节点判别字段。 */
-  kind: "zone";
-  /** 被引用的稳定乘区 ID。 */
-  zoneId: FormulaZoneId;
-  /** 可选伤害类型筛选。 */
-  damageType?: FormulaDamageType;
+/** 对若干子节点执行纯数学运算的节点。 */
+export class FormulaOperationExpression extends FormulaExpressionNode {
+  readonly kind = "operation" as const;
+
+  constructor(
+    /** 当前节点执行的稳定运算类型。 */
+    public readonly operator: FormulaOperator,
+    /** 按源码和运行时写入顺序参与运算的子节点。 */
+    public readonly operands: FormulaExpression[],
+  ) {
+    super();
+  }
+
+  /** 计算节点中的全部操作数。 */
+  calculate(): number {
+    const values = this.operands.map((operand) => operand.calculate());
+    switch (this.operator) {
+      case "add":
+      case "sum":
+        return values.reduce((result, value) => result + value, 0);
+      case "subtract":
+        return values.slice(1).reduce((result, value) => result - value, values[0] ?? 0);
+      case "multiply":
+      case "product":
+        return values.reduce((result, value) => result * value, 1);
+      case "divide":
+        return values.slice(1).reduce((result, value) => result / value, values[0] ?? 0);
+      case "max":
+        return values.length === 0 ? Number.NEGATIVE_INFINITY : Math.max(...values);
+      case "min":
+        return values.length === 0 ? Number.POSITIVE_INFINITY : Math.min(...values);
+      case "union":
+        return 1 - values.reduce((remaining, value) => remaining * (1 - value), 1);
+      case "product-one-plus":
+        return values.reduce((result, value) => result * (1 + value), 1);
+      case "percent-plus": {
+        // 第一个 item 是显式基数，后续 item 统一按百分数换算。
+        const [base = 0, ...percentages] = values;
+        return base + percentages.reduce((result, value) => result + value, 0) / 100;
+      }
+    }
+  }
+
+  /** 深度复制全部操作数。 */
+  clone(): FormulaOperationExpression {
+    return new FormulaOperationExpression(
+      this.operator,
+      this.operands.map((operand) => operand.clone()),
+    );
+  }
 }
 
-/** 公式 AST 的子公式引用节点。 */
-export interface FormulaReferenceExpression {
-  /** 节点判别字段。 */
-  kind: "formula";
-  /** 被引用的稳定公式 ID。 */
-  formulaId: FormulaId;
+/** 可由藏品等业务直接追加 item 的命名乘区。 */
+export class FormulaZoneExpression extends FormulaExpressionNode {
+  readonly kind = "zone" as const;
+
+  /** 可枚举运算符随 ZoneNode 一起序列化到 docs JSON。 */
+  public readonly operator: FormulaOperator;
+
+  /** 可枚举 item 随 ZoneNode 一起序列化到 docs JSON。 */
+  public readonly operands: readonly FormulaExpression[];
+
+  constructor(
+    /** 用于 FormulaBook 查找的稳定枚举 ID。 */
+    public readonly zoneId: FormulaZoneId,
+    /** 静态基数和运行时 item 共同使用的区内运算。 */
+    public readonly expression: FormulaOperationExpression,
+  ) {
+    super();
+    this.operator = expression.operator;
+    this.operands = expression.operands;
+  }
+
+  /** 当前 zone 中包含静态基数在内的全部 item。 */
+  get items(): readonly FormulaItemExpression[] {
+    return this.expression.operands as FormulaItemExpression[];
+  }
+
+  /** 向当前 FormulaBook 实例中的 zone 直接追加一个 item。 */
+  add_item(entry: FormulaItemExpression): this {
+    this.expression.operands.push(entry);
+    return this;
+  }
+
+  /** 按当前全部 item 直接计算乘区结果。 */
+  calculate(): number {
+    return this.expression.calculate();
+  }
+
+  /** 深度复制当前 zone 及其中的全部 item。 */
+  clone(): FormulaZoneExpression {
+    return new FormulaZoneExpression(this.zoneId, this.expression.clone());
+  }
 }
 
-/** 公式 AST 的多参数运算节点。 */
-export interface OperationExpression {
-  /** 节点判别字段。 */
-  kind: "operation";
-  /** 运算类型。 */
-  operator: "add" | "subtract" | "multiply" | "divide" | "max" | "min";
-  /** 按顺序参与运算的子表达式。 */
-  operands: FormulaExpression[];
-  /** 运算原因，供公式树和 UI 提示展示。 */
-  tooltip: string;
+/** 对一段派生计算命名和复用的公式节点。 */
+export class FormulaNodeExpression extends FormulaExpressionNode {
+  readonly kind = "formula" as const;
+
+  constructor(
+    /** 公式与乘区共用命名空间中的稳定枚举 ID。 */
+    public readonly id: FormulaZoneId,
+    /** 当前命名公式包装的实际计算树。 */
+    public readonly expression: FormulaExpression,
+  ) {
+    super();
+  }
+
+  /** 直接递归计算当前公式对象图。 */
+  calculate(): number {
+    return this.expression.calculate();
+  }
+
+  /** 深度复制当前命名公式。 */
+  clone(): FormulaNodeExpression {
+    return new FormulaNodeExpression(this.id, this.expression.clone());
+  }
 }
 
-/** 可计算、可渲染的公式 AST 节点联合。 */
+/** 可按 kind 安全收窄的全部类 AST 节点联合。 */
 export type FormulaExpression =
-  | ConstantExpression
-  | InputExpression
-  | ZoneExpression
-  | FormulaReferenceExpression
-  | OperationExpression;
+  | FormulaItemExpression
+  | FormulaOperationExpression
+  | FormulaZoneExpression
+  | FormulaNodeExpression;
 
-/** 当前实验公式簿中的稳定公式 ID。 */
-export type FormulaId =
-  | "FINAL_ATK"
-  | "FINAL_CHAR_HP"
-  | "FINAL_CHAR_DEF"
-  | "FINAL_CHAR_RES"
-  | "FINAL_DEPLOY_COST"
-  | "FINAL_INITIAL_DP"
-  | "FINAL_BLOCK_COUNT"
-  | "FINAL_INITIAL_SP"
-  | "FINAL_SP_COST"
-  | "FINAL_SP_RECOVERY_PER_SECOND"
-  | "SP_GAIN_PER_TRIGGER"
-  | "PHYSICAL_EVASION_RATE"
-  | "MAGICAL_EVASION_RATE"
-  | "FINAL_ENEMY_ATK"
-  | "FINAL_ENEMY_ATTACK_SPEED"
-  | "FINAL_ENEMY_MOVE_SPEED"
-  | "FINAL_DEPLOY_LIMIT"
-  | "FINAL_ENEMY_DEF"
-  | "FINAL_ENEMY_RES"
-  | "EFFECTIVE_DEF"
-  | "EFFECTIVE_RES"
-  | "ENEMY_MAX_HP"
-  | "FINAL_ENEMY_DAMAGE_RESISTANCE"
-  | "CHAR_TAKEN_DAMAGE"
-  | "ENEMY_OUTGOING_DAMAGE"
-  | "ELEMENTAL_IMPAIRMENT_TO_ENEMY"
-  | "ELEMENTAL_IMPAIRMENT_TO_CHAR"
-  | "PHYSICAL_MAIN_DAMAGE"
-  | "MAGICAL_MAIN_DAMAGE"
-  | "PURE_MAIN_DAMAGE"
-  | "ELEMENTAL_MAIN_DAMAGE"
-  | "TOTAL_DAMAGE"
-  | "DPS";
+/** 运算构造器只负责创建类节点，不承载业务逻辑。 */
+export type FormulaOperationBuilder = (...operands: FormulaExpression[]) => FormulaOperationExpression;
 
-/** @deprecated 公式簿已不限于伤害，请使用 FormulaId。 */
-export type DamageFormulaId = FormulaId;
-
-/** 一条有名称、有根节点的完整公式。 */
-export interface FormulaDefinition {
-  /** 稳定公式 ID。 */
-  id: FormulaId;
-  /** 人类可读名称。 */
-  name: string;
-  /** 公式左侧使用的短符号。 */
-  symbol: string;
-  /** 公式用途说明。 */
-  tooltip: string;
-  /** 公式的 AST 根节点。 */
-  expression: FormulaExpression;
+/** 创建公式中的固定数值或运行时贡献项。 */
+export function item(tooltip: string, value: number): FormulaItemExpression {
+  return new FormulaItemExpression(tooltip, value);
 }
 
-/** @deprecated 公式簿已不限于伤害，请使用 FormulaDefinition。 */
-export type DamageFormulaDefinition = FormulaDefinition;
-
-/** 创建数值常量节点。 */
-export function constant(value: number): ConstantExpression {
-  return { kind: "constant", value };
+/** 创建通用纯运算节点。 */
+export function operation(operator: FormulaOperator, ...operands: FormulaExpression[]): FormulaOperationExpression {
+  return new FormulaOperationExpression(operator, operands);
 }
 
-/** 创建带说明的外部输入节点。 */
-export function input(inputId: FormulaInputId, symbol: string, tooltip: string): InputExpression {
-  return { kind: "input", inputId, symbol, tooltip };
+/** 创建结构加法节点。 */
+export function plus(...operands: FormulaExpression[]): FormulaOperationExpression {
+  return operation("add", ...operands);
 }
 
-/** 创建乘区引用节点。 */
-export function zone(zoneId: FormulaZoneId, damageType?: FormulaDamageType): ZoneExpression {
-  return { kind: "zone", zoneId, damageType };
+/** 创建结构减法节点。 */
+export function subtract(...operands: FormulaExpression[]): FormulaOperationExpression {
+  return operation("subtract", ...operands);
 }
 
-/** 创建子公式引用节点。 */
-export function formula(formulaId: FormulaId): FormulaReferenceExpression {
-  return { kind: "formula", formulaId };
+/** 创建结构乘法节点。 */
+export function multiply(...operands: FormulaExpression[]): FormulaOperationExpression {
+  return operation("multiply", ...operands);
 }
 
-/** 创建通用多参数运算节点。 */
-function operation(
-  operator: OperationExpression["operator"],
-  tooltip: string,
-  operands: FormulaExpression[],
-): OperationExpression {
-  return { kind: "operation", operator, tooltip, operands };
-}
-
-/** 创建加法节点。 */
-export function add(tooltip: string, ...operands: FormulaExpression[]): OperationExpression {
-  return operation("add", tooltip, operands);
-}
-
-/** 创建减法节点。 */
-export function subtract(tooltip: string, ...operands: FormulaExpression[]): OperationExpression {
-  return operation("subtract", tooltip, operands);
-}
-
-/** 创建乘法节点。 */
-export function multiply(tooltip: string, ...operands: FormulaExpression[]): OperationExpression {
-  return operation("multiply", tooltip, operands);
-}
-
-/** 创建除法节点。 */
-export function divide(tooltip: string, ...operands: FormulaExpression[]): OperationExpression {
-  return operation("divide", tooltip, operands);
+/** 创建结构除法节点。 */
+export function divide(...operands: FormulaExpression[]): FormulaOperationExpression {
+  return operation("divide", ...operands);
 }
 
 /** 创建最大值节点。 */
-export function max(tooltip: string, ...operands: FormulaExpression[]): OperationExpression {
-  return operation("max", tooltip, operands);
+export function max(...operands: FormulaExpression[]): FormulaOperationExpression {
+  return operation("max", ...operands);
 }
 
 /** 创建最小值节点。 */
-export function min(tooltip: string, ...operands: FormulaExpression[]): OperationExpression {
-  return operation("min", tooltip, operands);
+export function min(...operands: FormulaExpression[]): FormulaOperationExpression {
+  return operation("min", ...operands);
+}
+
+/** 创建概率并集节点。 */
+export function union(...operands: FormulaExpression[]): FormulaOperationExpression {
+  return operation("union", ...operands);
+}
+
+/** 创建绝对倍率逐项乘算节点。 */
+export function product(...operands: FormulaExpression[]): FormulaOperationExpression {
+  return operation("product", ...operands);
+}
+
+/** 创建每项先加一再逐项乘算节点。 */
+export function productOnePlus(...operands: FormulaExpression[]): FormulaOperationExpression {
+  return operation("product-one-plus", ...operands);
+}
+
+/** 创建以第一个 item 为基数、其余 item 除以一百后加算的节点。 */
+export function percentPlus(...operands: FormulaExpression[]): FormulaOperationExpression {
+  return operation("percent-plus", ...operands);
+}
+
+/** 创建可以直接追加 item 的命名乘区节点。 */
+export function zone(
+  zoneId: FormulaZoneId,
+  createOperation: FormulaOperationBuilder,
+  ...items: FormulaItemExpression[]
+): FormulaZoneExpression {
+  return new FormulaZoneExpression(zoneId, createOperation(...items));
+}
+
+/** 创建保留稳定枚举 ID 的命名公式节点。 */
+export function formula(zoneId: FormulaZoneId, expression: FormulaExpression): FormulaNodeExpression {
+  return new FormulaNodeExpression(zoneId, expression);
 }
