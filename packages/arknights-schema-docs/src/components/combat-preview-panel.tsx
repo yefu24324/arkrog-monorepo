@@ -1,4 +1,4 @@
-/** 使用当前 FormulaBook 计算选中藏品下的干员最终攻击力。 */
+/** 使用当前 FormulaBook 计算选中藏品下的干员与敌人属性。 */
 
 'use client';
 
@@ -15,6 +15,8 @@ import {
   FormulaBook,
   FormulaZoneId,
   item,
+  plus,
+  type FormulaExpression,
 } from '@arkrog/arknights-knowledge-graph/formula';
 import {
   applyRelicItemsToFormulaBook,
@@ -26,7 +28,7 @@ import { cn } from '../lib/cn';
 /** 干员目录直接使用 relics:export 的轻量条目。 */
 type OperatorIndexEntry = ExportedOperatorIndexItem;
 
-/** 计算攻击力所需的最高阶段干员数据。 */
+/** 计算属性所需的最高阶段干员数据。 */
 interface OperatorDetail {
   id: string;
   name: string;
@@ -37,19 +39,20 @@ interface OperatorDetail {
   attributes: OriginalGameDataObject;
 }
 
-/** 敌人目录只用于攻击力藏品的生效条件。 */
+/** 敌人目录用于实体选择和藏品生效条件。 */
 interface EnemyIndexEntry {
   id: string;
   name: string;
   prefabKey: string;
 }
 
-/** 敌人详情只保留激活判断需要的原始字段。 */
+/** 敌人详情同时提供基础属性和激活判断需要的原始字段。 */
 interface EnemyDetail extends EnemyIndexEntry {
+  attributes: OriginalGameDataObject;
   enemyData: Record<string, unknown>;
 }
 
-/** 攻击力预览只接收藏品选择和主题证据路径。 */
+/** 属性预览接收当前启用藏品和主题证据路径。 */
 interface CombatPreviewPanelProps {
   selectedRelics: readonly WrappedRelicItem[];
   topicId: string;
@@ -94,7 +97,7 @@ function recordStringArray(record: Record<string, unknown>, key: string): string
     : undefined;
 }
 
-/** 构建攻击力藏品的运行时生效上下文。 */
+/** 构建属性藏品的运行时生效上下文。 */
 function buildActivationContext(
   operator: OperatorDetail | null,
   enemy: EnemyDetail | null,
@@ -210,13 +213,60 @@ function EntitySelect<T extends { id: string; name: string }>({
   );
 }
 
-/** 格式化最终攻击力。 */
-function formatAttack(value: number | null): string {
+/** 统一格式化属性数值并保留最多两位小数。 */
+function formatAttribute(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return '—';
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+  return new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 }).format(value);
 }
 
-/** 攻击力限定的 FormulaBook 预览。 */
+/** 单个实体属性卡片使用的展示数据。 */
+interface PreviewAttribute {
+  key: string;
+  label: string;
+  value: number | null;
+  formula?: FormulaExpression;
+}
+
+/** 展示一个实体的五项战斗属性。 */
+function EntityAttributePanel({
+  title,
+  entityName,
+  attributes,
+  zoneComments,
+}: {
+  title: string;
+  entityName: string | null;
+  attributes: readonly PreviewAttribute[];
+  zoneComments?: Readonly<Record<string, string>>;
+}) {
+  return (
+    <div className="rounded-xl border bg-fd-muted/15 p-3">
+      <div className="mb-3 flex min-h-5 items-center gap-2">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        {entityName ? (
+          <span className="truncate text-xs text-fd-muted-foreground">{entityName}</span>
+        ) : null}
+      </div>
+      <dl className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        {attributes.map((attribute) => (
+          <div key={attribute.key} className="rounded-lg border bg-fd-background px-3 py-2.5">
+            <dt className="text-xs text-fd-muted-foreground">{attribute.label}</dt>
+            <dd className="mt-1 font-mono text-base font-semibold">
+              <FormulaResultPopover
+                value={formatAttribute(attribute.value)}
+                expression={attribute.formula}
+                labels={zoneComments}
+                label={`${title}${attribute.label}`}
+              />
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+/** 计算并展示当前藏品下的干员与敌人属性。 */
 export function CombatPreviewPanel({
   selectedRelics,
   topicId,
@@ -322,30 +372,195 @@ export function CombatPreviewPanel({
 
   const result = useMemo(() => {
     const baseAttack = attrNumber(operator?.attributes, 'atk');
-    if (baseAttack === null) return null;
+    const baseMaxHp = attrNumber(operator?.attributes, 'maxHp');
+    const baseAttackSpeed = attrNumber(operator?.attributes, 'attackSpeed');
+    const baseDefense = attrNumber(operator?.attributes, 'def');
+    const enemyBaseMaxHp = attrNumber(enemy?.attributes, 'maxHp');
+    const enemyBaseAttack = attrNumber(enemy?.attributes, 'atk');
+    const enemyBaseDefense = attrNumber(enemy?.attributes, 'def');
+    const enemyBaseMagicResistance = attrNumber(enemy?.attributes, 'magicResistance');
     const book = new FormulaBook();
-    book.add_item(
-      FormulaZoneId.operator_base_atk,
-      item('干员基础攻击力', baseAttack),
-    );
-    const placements = applyRelicItemsToFormulaBook(book, selectedRelics, {
+    if (baseAttack !== null) {
+      book.add_item(
+        FormulaZoneId.char_base_atk,
+        item('干员基础攻击力', baseAttack),
+      );
+    }
+    if (baseMaxHp !== null) {
+      book.add_item(
+        FormulaZoneId.char_base_max_hp,
+        item('干员基础最大生命', baseMaxHp),
+      );
+    }
+    if (baseAttackSpeed !== null) {
+      book.add_item(
+        FormulaZoneId.char_base_attack_speed,
+        item('干员基础攻击速度', baseAttackSpeed),
+      );
+    }
+    if (baseDefense !== null) {
+      book.add_item(
+        FormulaZoneId.char_base_def,
+        item('干员基础防御力', baseDefense),
+      );
+    }
+    if (enemyBaseMaxHp !== null) {
+      book.add_item(
+        FormulaZoneId.enemy_base_max_hp,
+        item('敌人基础最大生命', enemyBaseMaxHp),
+      );
+    }
+    if (enemyBaseAttack !== null) {
+      book.add_item(
+        FormulaZoneId.enemy_base_atk,
+        item('敌人基础攻击力', enemyBaseAttack),
+      );
+    }
+    if (enemyBaseDefense !== null) {
+      book.add_item(
+        FormulaZoneId.enemy_base_def,
+        item('敌人基础防御力', enemyBaseDefense),
+      );
+    }
+    if (enemyBaseMagicResistance !== null) {
+      book.add_item(
+        FormulaZoneId.enemy_base_magic_resist,
+        item('敌人基础法抗', enemyBaseMagicResistance),
+      );
+    }
+    applyRelicItemsToFormulaBook(book, selectedRelics, {
       topicId,
       activation: buildActivationContext(operator, enemy),
     });
+    // FormulaBook 只定义基础攻速与直接加成两个真实 zone，预览现场组合二者。
+    const operatorAttackSpeedFormula = plus(
+      book.get_zone(FormulaZoneId.char_base_attack_speed),
+      book.get_zone(FormulaZoneId.char_direct_attack_speed_add),
+    );
     return {
-      baseAttack,
-      finalAttack: book.calculate(FormulaZoneId.operator_final_atk),
-      formula: book.get_zone(FormulaZoneId.operator_final_atk),
-      placementCount: placements.length,
+      operatorAttack: baseAttack === null
+        ? null
+        : book.calculate(FormulaZoneId.char_final_atk),
+      operatorMaxHp: baseMaxHp === null
+        ? null
+        : book.calculate(FormulaZoneId.char_final_max_hp),
+      operatorAttackSpeed: baseAttackSpeed === null
+        ? null
+        : operatorAttackSpeedFormula.calculate(),
+      operatorDefense: baseDefense === null
+        ? null
+        : book.calculate(FormulaZoneId.char_final_def),
+      enemyMaxHp: enemyBaseMaxHp === null
+        ? null
+        : book.calculate(FormulaZoneId.enemy_final_max_hp),
+      enemyAttack: enemyBaseAttack === null
+        ? null
+        : book.calculate(FormulaZoneId.enemy_final_atk),
+      enemyDefense: enemyBaseDefense === null
+        ? null
+        : book.calculate(FormulaZoneId.enemy_final_def),
+      enemyMagicResistance: enemyBaseMagicResistance === null
+        ? null
+        : book.calculate(FormulaZoneId.enemy_final_magic_resist),
+      operatorAttackFormula: baseAttack === null
+        ? undefined
+        : book.get_zone(FormulaZoneId.char_final_atk),
+      operatorMaxHpFormula: baseMaxHp === null
+        ? undefined
+        : book.get_zone(FormulaZoneId.char_final_max_hp),
+      operatorAttackSpeedFormula: baseAttackSpeed === null
+        ? undefined
+        : operatorAttackSpeedFormula,
+      operatorDefenseFormula: baseDefense === null
+        ? undefined
+        : book.get_zone(FormulaZoneId.char_final_def),
+      enemyMaxHpFormula: enemyBaseMaxHp === null
+        ? undefined
+        : book.get_zone(FormulaZoneId.enemy_final_max_hp),
+      enemyAttackFormula: enemyBaseAttack === null
+        ? undefined
+        : book.get_zone(FormulaZoneId.enemy_final_atk),
+      enemyDefenseFormula: enemyBaseDefense === null
+        ? undefined
+        : book.get_zone(FormulaZoneId.enemy_final_def),
+      enemyMagicResistanceFormula: enemyBaseMagicResistance === null
+        ? undefined
+        : book.get_zone(FormulaZoneId.enemy_final_magic_resist),
     };
   }, [enemy, operator, selectedRelics, topicId]);
+
+  /** 干员攻击力、生命、攻速和防御力使用 FormulaBook，法抗仍读取原始属性帧。 */
+  const operatorAttributes: PreviewAttribute[] = [
+    {
+      key: 'atk',
+      label: '攻击力',
+      value: result.operatorAttack,
+      formula: result.operatorAttackFormula,
+    },
+    {
+      key: 'maxHp',
+      label: '血量',
+      value: result.operatorMaxHp,
+      formula: result.operatorMaxHpFormula,
+    },
+    {
+      key: 'attackSpeed',
+      label: '攻速',
+      value: result.operatorAttackSpeed,
+      formula: result.operatorAttackSpeedFormula,
+    },
+    {
+      key: 'def',
+      label: '防御',
+      value: result.operatorDefense,
+      formula: result.operatorDefenseFormula,
+    },
+    {
+      key: 'magicResistance',
+      label: '法抗',
+      value: attrNumber(operator?.attributes, 'magicResistance'),
+    },
+  ];
+
+  /** 敌人攻击力、生命、防御力和法抗均通过 FormulaBook 计算。 */
+  const enemyAttributes: PreviewAttribute[] = [
+    {
+      key: 'atk',
+      label: '攻击力',
+      value: result.enemyAttack,
+      formula: result.enemyAttackFormula,
+    },
+    {
+      key: 'maxHp',
+      label: '血量',
+      value: result.enemyMaxHp,
+      formula: result.enemyMaxHpFormula,
+    },
+    {
+      key: 'attackSpeed',
+      label: '攻速',
+      value: attrNumber(enemy?.attributes, 'attackSpeed'),
+    },
+    {
+      key: 'def',
+      label: '防御',
+      value: result.enemyDefense,
+      formula: result.enemyDefenseFormula,
+    },
+    {
+      key: 'magicResistance',
+      label: '法抗',
+      value: result.enemyMagicResistance,
+      formula: result.enemyMagicResistanceFormula,
+    },
+  ];
 
   return (
     <section className={cn('rounded-2xl border bg-fd-card p-4 shadow-sm', className)}>
       <div className="mb-4">
-        <h2 className="text-base font-semibold">最终攻击力预览</h2>
+        <h2 className="text-base font-semibold">属性预览</h2>
         <p className="mt-1 text-xs text-fd-muted-foreground">
-          选择干员和可选敌人后，使用当前 FormulaBook 计算 operator_final_atk。
+          选择干员和敌人后，根据当前启用的藏品计算战斗属性。
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -359,7 +574,7 @@ export function CombatPreviewPanel({
           onClear={clearOperator}
         />
         <EntitySelect
-          label="条件敌人"
+          label="敌人"
           items={enemyIndex}
           selectedId={enemyId}
           selectedName={enemy?.name ?? null}
@@ -371,20 +586,19 @@ export function CombatPreviewPanel({
       {loadError ? (
         <p className="mt-3 text-xs text-red-500">{loadError}</p>
       ) : null}
-      <div className="mt-4 flex items-center justify-between rounded-xl border bg-fd-muted/15 px-4 py-3">
-        <div>
-          <p className="text-xs text-fd-muted-foreground">干员最终攻击力</p>
-          <p className="mt-1 text-[0.7rem] text-fd-muted-foreground">
-            基础 {formatAttack(result?.baseAttack ?? null)} · 生效公式项 {result?.placementCount ?? 0}
-          </p>
-        </div>
-        <div className="font-mono text-lg">
-          <FormulaResultPopover
-            value={formatAttack(result?.finalAttack ?? null)}
-            expression={result?.formula}
-            labels={zoneComments}
-          />
-        </div>
+      <div className="mt-4 space-y-3">
+        <EntityAttributePanel
+          title="干员属性"
+          entityName={operator?.name ?? null}
+          attributes={operatorAttributes}
+          zoneComments={zoneComments}
+        />
+        <EntityAttributePanel
+          title="敌人属性"
+          entityName={enemy?.name ?? null}
+          attributes={enemyAttributes}
+          zoneComments={zoneComments}
+        />
       </div>
     </section>
   );

@@ -49,7 +49,7 @@ export interface RelicItem {
   type: string;
 }
 
-/** JSON 中单个攻击力乘区预测的稳定结构。 */
+/** JSON 中单个属性乘区预测的稳定结构。 */
 export interface ExportedZonePrediction {
   /** FormulaBook 中允许业务写入的真实 zone。 */
   zoneId: FormulaWritableZoneId;

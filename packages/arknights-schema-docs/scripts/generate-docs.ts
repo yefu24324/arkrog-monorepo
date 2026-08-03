@@ -752,7 +752,7 @@ ${cards}
     对照 Kuzu 图谱、公式贡献函数与稀疏 human 人工修正
   </Card>
   <Card title="公式簿" href="/docs/formula-book">
-    operator_final_atk
+    char_final_atk
   </Card>
 </Cards>
 `;
@@ -843,18 +843,30 @@ function serializeFormulaExpression(
   };
 }
 
-/** 从当前 FormulaBook 只生成 operator_final_atk 的递归 AST 页面。 */
+/** 从当前 FormulaBook 生成攻击力 AST 与全部可写乘区注释索引。 */
 function writeFormulaBookPage(): number {
   const book = new FormulaBook();
-  const formula = book.get_zone(FormulaZoneId.operator_final_atk);
+  const comments = readFormulaZoneComments();
+  const formula = book.get_zone(FormulaZoneId.char_final_atk);
   const serializedFormula = serializeFormulaExpression(
     formula,
-    readFormulaZoneComments(),
+    comments,
+  );
+  // 藏品表需要显示不属于攻击力 AST 的防御力、生命等可写乘区中文名。
+  const writableZoneComments = Object.fromEntries(
+    Object.values(book.zones)
+      .filter((expression) => expression.kind === "zone")
+      .map((expression) => {
+        const comment = comments.get(expression.zoneId);
+        if (!comment) throw new Error(`FormulaZoneId.${expression.zoneId} 缺少 JSDoc 注释。`);
+        return [expression.zoneId, comment];
+      }),
   );
   const data = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     source: "packages/arknights-knowledge-graph/src/lib/formula/formula-book.ts",
     formula: serializedFormula,
+    writableZoneComments,
   };
   fs.mkdirSync(path.dirname(FORMULA_BOOK_DATA_PATH), { recursive: true });
   fs.writeFileSync(FORMULA_BOOK_DATA_PATH, `${JSON.stringify(data, null, 2)}\n`, "utf8");

@@ -1,4 +1,4 @@
-/** 将攻击力语义预测转换为 FormulaBook 可直接消费的最小公式项。 */
+/** 将属性语义预测转换为 FormulaBook 可直接消费的最小公式项。 */
 
 import type { EnginePrediction } from "../domain/engine-rules.js";
 import { item as createFormulaItem } from "../formula/ast.js";
@@ -16,8 +16,8 @@ export interface BlackboardEntry {
   valueStr: string | null;
 }
 
-/** 已完成攻击力乘区路由、等待解释数值的单条效果。 */
-export interface RelicAttackEffect {
+/** 已完成属性乘区路由、等待解释数值的单条效果。 */
+export interface RelicFormulaEffect {
   /** 稳定效果 ID。 */
   effectId: string;
   /** relics 或 charBuffData:... 来源标签。 */
@@ -30,11 +30,11 @@ export interface RelicAttackEffect {
   blackboard: readonly BlackboardEntry[];
   /** 原始 GameData JSON 路径。 */
   jsonPath: string;
-  /** engine-rules 给出的攻击力 zone 预测。 */
+  /** engine-rules 给出的属性 zone 预测。 */
   predictions: readonly EnginePrediction[];
 }
 
-/** 单条攻击力效果写入 FormulaBook 后返回的可追溯记录。 */
+/** 单条属性效果写入 FormulaBook 后返回的可追溯记录。 */
 export interface FormulaItemPlacement {
   /** 已由规则或精确模板确定的真实写入 zone。 */
   zoneId: FormulaWritableZoneId;
@@ -43,7 +43,7 @@ export interface FormulaItemPlacement {
   /** 图谱路由证据与运行时公式项分离保存。 */
   route: {
     /** 提供数值的黑板参数。 */
-    parameterKey: "atk";
+    parameterKey: "atk" | "attack_speed" | "def" | "max_hp" | "magic_resistance";
     /** 命中的语义规则或精确模板 ID。 */
     ruleId: string;
     /** 为什么写入该 zone。 */
@@ -53,10 +53,10 @@ export interface FormulaItemPlacement {
   };
 }
 
-/** 将一条已路由效果转换为可直接追加到 FormulaBook 的攻击力公式项。 */
+/** 将一条已路由效果转换为可直接追加到 FormulaBook 的属性公式项。 */
 export function formulaItemsFromRelicEffect(
   relic: { readonly name: string },
-  effect: RelicAttackEffect,
+  effect: RelicFormulaEffect,
   options: {
     /** 当前层数由精确模板解释，普通静态 buff 不消费。 */
     layer?: number;

@@ -1,5 +1,5 @@
 /**
- * 将攻击力藏品的公式项写入结果整理为人工校验产物。
+ * 将属性藏品的公式项写入结果整理为人工校验产物。
  * 本模块只使用 FormulaBook 的真实可写 zone，不保留旧全属性乘区兼容层。
  */
 
@@ -25,7 +25,7 @@ export interface RelicZoneArtifactProducer {
   description: string;
 }
 
-/** 带生成路径说明的攻击力藏品乘区产物。 */
+/** 带生成路径说明的属性藏品乘区产物。 */
 export interface RelicZoneValidationArtifact extends RelicZoneExport {
   /** graph/formula 产物身份。 */
   producer: RelicZoneArtifactProducer;
@@ -41,7 +41,7 @@ function assumedActiveLayer(effect: ExportedRelicEffect): number {
     : 1;
 }
 
-/** 将公式项写入记录转换为当前攻击力 JSON 的乘区预测。 */
+/** 将公式项写入记录转换为当前属性 JSON 的乘区预测。 */
 function predictionFromPlacement(
   effect: ExportedRelicEffect,
   routedPredictions: ReturnType<typeof routeRelicBuffToZones>["predictions"],
@@ -92,7 +92,7 @@ function countCoverage(effects: readonly ExportedRelicEffect[]): RelicZoneExport
 
 /**
  * 构建公式项校验产物。
- * 每个原始 buff 都重新经过运行时攻击力路由与 FormulaItem 构造函数；只记录实际可写入的 zone。
+ * 每个原始 buff 都重新经过运行时属性路由与 FormulaItem 构造函数；只记录实际可写入的 zone。
  */
 export function buildFormulaRelicZoneValidationArtifact(
   classified: RelicZoneExport,
@@ -137,7 +137,7 @@ export function buildFormulaRelicZoneValidationArtifact(
         unclassifiedReason: predictions.length > 0
           ? null
           : routed.predictions.length > 0
-            ? "攻击力语义已有乘区预测，但公式项程序没有产生有效的非零写入项。"
+            ? "属性语义已有乘区预测，但公式项程序没有产生有效的非零写入项。"
             : routed.unclassifiedReason,
       };
       allEffects.push(normalized);
@@ -158,7 +158,7 @@ export function buildFormulaRelicZoneValidationArtifact(
       kind: "formula",
       activationPolicy: "assume_active",
       numericEvaluation: false,
-      description: "攻击力公式项写入检查；全部 buff 假定生效，不执行公式数值求值。",
+      description: "属性公式项写入检查；全部 buff 假定生效，不执行公式数值求值。",
     },
     sources: [
       ...classified.sources,

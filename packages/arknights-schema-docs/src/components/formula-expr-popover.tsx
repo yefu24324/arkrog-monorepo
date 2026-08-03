@@ -14,16 +14,19 @@ import type { FormulaExpression } from '@arkrog/arknights-knowledge-graph/formul
 import { cn } from '../lib/cn';
 import { NumericFormulaDisplay } from './numeric-formula-display';
 
-/** 点击最终攻击力数值后弹出当前 FormulaBook 的递归 AST。 */
+/** 点击最终属性数值后弹出当前 FormulaBook 的递归 AST。 */
 export function FormulaResultPopover({
   value,
   expression,
   labels,
+  label = '最终属性',
   className,
 }: {
   value: string;
   expression: FormulaExpression | null | undefined;
   labels?: Readonly<Record<string, string>>;
+  /** 当前数值对应的中文属性名称。 */
+  label?: string;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -85,7 +88,7 @@ export function FormulaResultPopover({
             <div
               ref={panelRef}
               role="dialog"
-              aria-label="最终攻击力公式"
+              aria-label={`${label}公式`}
               className="fixed z-[90] w-[min(40rem,calc(100vw-1rem))] overflow-hidden rounded-xl border bg-fd-card text-fd-card-foreground shadow-xl ring-1 ring-black/5 dark:ring-white/10"
               style={{ top: position.top, left: position.left }}
             >
@@ -94,7 +97,7 @@ export function FormulaResultPopover({
                   ƒ
                 </span>
                 <div className="min-w-0">
-                  <p className="text-xs font-medium">干员最终攻击力</p>
+                  <p className="text-xs font-medium">{label}</p>
                   <p className="text-[0.65rem] text-fd-muted-foreground">公式计算</p>
                 </div>
                 <span className="ml-auto rounded-md bg-fd-primary/10 px-2 py-1 font-mono text-xs font-semibold text-fd-primary">

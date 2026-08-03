@@ -21,6 +21,11 @@ import type { RepositoryPaths } from "./types.js";
 /** Kuzu 批量写入接受的通用行。 */
 type Row = Record<string, KuzuValue>;
 
+/** Kuzu Node 驱动对批量 DOUBLE number 存在按位写入问题，统一以十进制文本传输。 */
+function doubleText(value: number): string {
+  return String(value);
+}
+
 /** 构建结果统计，用于 CI 和人工确认导入覆盖范围。 */
 export interface BuildStatistics {
   /** 导入的数据源数量。 */
@@ -271,7 +276,7 @@ function addEffect(
     dataset.parameters.push({
       id: parameterId,
       key: parameter.key,
-      numericValue: parameter.value,
+      numericValue: doubleText(parameter.value),
       stringValue: parameter.valueStr ?? "",
       jsonPath: `${input.jsonPath}.blackboard[${parameterIndex}]`,
     });
@@ -292,7 +297,7 @@ function addEffect(
       to: prediction.zoneId,
       ruleId: prediction.ruleId,
       status: prediction.status,
-      confidence: prediction.confidence,
+      confidence: doubleText(prediction.confidence),
       reason: prediction.reason,
       evidencePath: prediction.evidencePath,
     });
@@ -313,7 +318,7 @@ async function collectRoguelikeKnowledge(
   const fieldIds = new Set(dataset.fields.map((field) => String(field.id)));
 
   for (const [topicId, detail] of Object.entries(data.details)) {
-    // 当前图谱版本只导入藏品攻击力事实；肉鸽难度等待后续按新 FormulaBook 单独重构。
+    // 当前图谱版本导入藏品攻击力、防御力与最大生命事实；肉鸽难度等待后续按新 FormulaBook 单独重构。
     const itemIds = new Set<string>();
     for (const [rawId, item] of Object.entries(detail.items)) {
       const id = `item:${topicId}:${rawId}`;
@@ -373,7 +378,7 @@ async function collectRoguelikeKnowledge(
   }
 }
 
-/** 添加 FormulaBook 真实可写乘区、攻击力语义规则以及字段映射。 */
+/** 添加 FormulaBook 真实可写乘区、属性语义规则以及字段映射。 */
 function collectDomainKnowledge(dataset: GraphDataset): void {
   const writableZones = Object.values(new FormulaBook().zones)
     .filter((zone): zone is FormulaZoneExpression => zone instanceof FormulaZoneExpression);
@@ -395,7 +400,7 @@ function collectDomainKnowledge(dataset: GraphDataset): void {
       description: rule.description,
       zoneId: rule.zoneId,
       status: rule.status,
-      confidence: rule.confidence,
+      confidence: doubleText(rule.confidence),
     });
     dataset.ruleTargetsZone.push({ from: rule.id, to: rule.zoneId });
     for (const fieldPath of rule.fieldPaths ?? []) {
@@ -409,7 +414,7 @@ function collectDomainKnowledge(dataset: GraphDataset): void {
         to: rule.zoneId,
         ruleId: rule.id,
         status: rule.status,
-        confidence: rule.confidence,
+        confidence: doubleText(rule.confidence),
         reason: `${rule.name}：${rule.description}`,
         evidencePath: `packages/arknights-knowledge-graph/src/lib/domain/engine-rules.ts#${rule.id}`,
       });
@@ -426,11 +431,11 @@ async function writeDataset(connection: Connection, dataset: GraphDataset): Prom
     [dataset.difficulties, "CREATE (n:RogueDifficulty {id: row.id, topic: row.topic, modeDifficulty: row.modeDifficulty, grade: row.grade, name: row.name, ruleDesc: row.ruleDesc, classification: row.classification, unclassifiedReason: row.unclassifiedReason, jsonPath: row.jsonPath})"],
     [dataset.difficultyEffects, "CREATE (n:DifficultyEffect {id: row.id, matchedText: row.matchedText, numericValue: CAST(row.numericText AS DOUBLE), target: row.target, damageTypes: row.damageTypes, evidenceKind: row.evidenceKind, jsonPath: row.jsonPath})"],
     [dataset.effects, "CREATE (n:Effect {id: row.id, key: row.key, parameters: row.parameters, sourceKind: row.sourceKind, jsonPath: row.jsonPath})"],
-    [dataset.parameters, "CREATE (n:Parameter {id: row.id, key: row.key, numericValue: row.numericValue, stringValue: row.stringValue, jsonPath: row.jsonPath})"],
+    [dataset.parameters, "CREATE (n:Parameter {id: row.id, key: row.key, numericValue: CAST(row.numericValue AS DOUBLE), stringValue: row.stringValue, jsonPath: row.jsonPath})"],
     [dataset.fields, "CREATE (n:Field {id: row.id, path: row.path, description: row.description})"],
     [dataset.mechanics, "CREATE (n:Mechanic {id: row.id, name: row.name, componentTypes: row.componentTypes, events: row.events, sourcePath: row.sourcePath, jsonPath: row.jsonPath})"],
     [dataset.actions, "CREATE (n:MechanicAction {id: row.id, event: row.event, componentType: row.componentType, targetType: row.targetType, buffOwner: row.buffOwner, attributeType: row.attributeType, formulaItem: row.formulaItem, damageMask: row.damageMask, applyWay: row.applyWay, rawJson: row.rawJson, jsonPath: row.jsonPath})"],
-    [dataset.semanticRules, "CREATE (n:SemanticRule {id: row.id, version: row.version, name: row.name, description: row.description, zoneId: row.zoneId, status: row.status, confidence: row.confidence})"],
+    [dataset.semanticRules, "CREATE (n:SemanticRule {id: row.id, version: row.version, name: row.name, description: row.description, zoneId: row.zoneId, status: row.status, confidence: CAST(row.confidence AS DOUBLE)})"],
     [dataset.zones, "CREATE (n:DamageZone {id: row.id, symbol: row.symbol, name: row.name, stage: row.stage, stacking: row.stacking, formula: row.formula})"],
   ];
   for (const [rows, create] of nodes) await executeBatch(connection, `UNWIND $rows AS row ${create}`, rows);
@@ -451,9 +456,9 @@ async function writeDataset(connection: Connection, dataset: GraphDataset): Prom
     [dataset.ruleTargetsZone, "MATCH (a:SemanticRule {id: row.from}), (b:DamageZone {id: row.to}) CREATE (a)-[:RULE_TARGETS_ZONE]->(b)"],
     [dataset.effectPredictedBy, "MATCH (a:Effect {id: row.from}), (b:SemanticRule {id: row.to}) CREATE (a)-[:EFFECT_PREDICTED_BY]->(b)"],
     [dataset.difficultyEffectPredictedBy, "MATCH (a:DifficultyEffect {id: row.from}), (b:SemanticRule {id: row.to}) CREATE (a)-[:DIFFICULTY_EFFECT_PREDICTED_BY]->(b)"],
-    [dataset.fieldEntersZone, "MATCH (a:Field {id: row.from}), (b:DamageZone {id: row.to}) CREATE (a)-[:FIELD_ENTERS_ZONE {ruleId: row.ruleId, status: row.status, confidence: row.confidence, reason: row.reason, evidencePath: row.evidencePath}]->(b)"],
-    [dataset.effectEntersZone, "MATCH (a:Effect {id: row.from}), (b:DamageZone {id: row.to}) CREATE (a)-[:EFFECT_ENTERS_ZONE {ruleId: row.ruleId, status: row.status, confidence: row.confidence, reason: row.reason, evidencePath: row.evidencePath}]->(b)"],
-    [dataset.difficultyEffectEntersZone, "MATCH (a:DifficultyEffect {id: row.from}), (b:DamageZone {id: row.to}) CREATE (a)-[:DIFFICULTY_EFFECT_ENTERS_ZONE {ruleId: row.ruleId, status: row.status, confidence: row.confidence, reason: row.reason, evidencePath: row.evidencePath}]->(b)"],
+    [dataset.fieldEntersZone, "MATCH (a:Field {id: row.from}), (b:DamageZone {id: row.to}) CREATE (a)-[:FIELD_ENTERS_ZONE {ruleId: row.ruleId, status: row.status, confidence: CAST(row.confidence AS DOUBLE), reason: row.reason, evidencePath: row.evidencePath}]->(b)"],
+    [dataset.effectEntersZone, "MATCH (a:Effect {id: row.from}), (b:DamageZone {id: row.to}) CREATE (a)-[:EFFECT_ENTERS_ZONE {ruleId: row.ruleId, status: row.status, confidence: CAST(row.confidence AS DOUBLE), reason: row.reason, evidencePath: row.evidencePath}]->(b)"],
+    [dataset.difficultyEffectEntersZone, "MATCH (a:DifficultyEffect {id: row.from}), (b:DamageZone {id: row.to}) CREATE (a)-[:DIFFICULTY_EFFECT_ENTERS_ZONE {ruleId: row.ruleId, status: row.status, confidence: CAST(row.confidence AS DOUBLE), reason: row.reason, evidencePath: row.evidencePath}]->(b)"],
   ];
   for (const [rows, statement] of relations) await executeBatch(connection, `UNWIND $rows AS row ${statement}`, rows);
 }

@@ -1,5 +1,5 @@
 /**
- * 攻击力藏品运行时链：原始 buff 路由、激活判定、FormulaItemExpression 构造和 FormulaBook 写入。
+ * 攻击力、攻击速度、防御力与最大生命藏品运行时链：原始 buff 路由、激活判定、FormulaItemExpression 构造和 FormulaBook 写入。
  */
 
 import type { WrappedRelicItem } from "@arkrog/arknights-schema/game-data";
@@ -16,10 +16,10 @@ import {
   formulaItemsFromRelicEffect,
   type BlackboardEntry,
   type FormulaItemPlacement,
-  type RelicAttackEffect,
+  type RelicFormulaEffect,
 } from "./relic-items.js";
 
-/** 单条原始 buff 的攻击力路由输入。 */
+/** 单条原始 buff 的属性路由输入。 */
 export interface RelicBuffRouteInput {
   /** 稳定效果 ID。 */
   effectId: string;
@@ -37,17 +37,17 @@ export interface RelicBuffRouteInput {
   mechanicIndex?: MechanicIndex;
 }
 
-/** 单条 buff 的攻击力乘区路由结果。 */
+/** 单条 buff 的属性乘区路由结果。 */
 export interface RelicBuffZoneRoute {
-  /** 交给运行时数值程序的纯攻击力效果。 */
-  effect: RelicAttackEffect;
+  /** 交给运行时数值程序的属性效果。 */
+  effect: RelicFormulaEffect;
   /** FormulaBook 中的去重真实写入 zone。 */
   zoneIds: FormulaWritableZoneId[];
   /** 原始语义规则预测，供图谱或调试展示。 */
   predictions: EnginePrediction[];
   /** 未映射效果与非战斗效果保持可区分状态。 */
   classification: "predicted" | "unknown" | "not_applicable";
-  /** 未产生攻击力 zone 时的保守说明。 */
+  /** 未产生已支持属性 zone 时的保守说明。 */
   unclassifiedReason: string | null;
 }
 
@@ -83,7 +83,7 @@ function parameterMap(
   );
 }
 
-/** 对未进入当前攻击力规则的效果给出保守分类，不猜测其他属性的乘区。 */
+/** 对未进入当前属性规则的效果给出保守分类，不猜测其他属性的乘区。 */
 function classifyUnmappedEffect(
   effectKey: string,
   blackboard: readonly BlackboardEntry[],
@@ -93,11 +93,11 @@ function classifyUnmappedEffect(
   return isCombatValue
     ? {
         classification: "unknown",
-        unclassifiedReason: "效果涉及战斗数值，但当前攻击力版本没有对应 FormulaBook 写入规则。",
+        unclassifiedReason: "效果涉及战斗数值，但当前属性规则没有对应 FormulaBook 写入规则。",
       }
     : {
         classification: "not_applicable",
-        unclassifiedReason: "奖励、资源或部署规则等效果不进入当前攻击力公式。",
+        unclassifiedReason: "奖励、资源或部署规则等效果不进入当前属性公式。",
       };
 }
 
@@ -123,7 +123,7 @@ export function routeRelicBuffToZones(input: RelicBuffRouteInput): RelicBuffZone
     sourceKind: input.source,
     jsonPath: input.jsonPath,
   });
-  const effect: RelicAttackEffect = {
+  const effect: RelicFormulaEffect = {
     effectId: input.effectId,
     source: input.source,
     key: input.key,
@@ -149,11 +149,11 @@ export function routeRelicBuffToZones(input: RelicBuffRouteInput): RelicBuffZone
   };
 }
 
-/** 将一条已路由且已激活的攻击力效果直接追加到当前 FormulaBook 实例。 */
+/** 将一条已路由且已激活的属性效果直接追加到当前 FormulaBook 实例。 */
 export function applyRelicEffectToFormulaBook(
   book: FormulaBook,
   relic: Pick<WrappedRelicItem, "name">,
-  effect: RelicAttackEffect,
+  effect: RelicFormulaEffect,
   options: ApplyRelicEffectOptions,
 ): FormulaItemPlacement[] {
   // 新典训职业限制位于直接奖励券而非 charBuffData 黑板，此处仅补入激活判断。

@@ -1,4 +1,4 @@
-/** 使用 FormulaZoneId 源码注释展示可交互的 operator_final_atk AST。 */
+/** 使用 FormulaZoneId 源码注释展示可交互的 char_final_atk AST。 */
 
 import type { FormulaAstFormulaNode } from '../lib/formula-book-runtime';
 import { ChineseFormulaDisplay } from './chinese-formula-display';

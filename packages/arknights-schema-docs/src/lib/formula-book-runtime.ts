@@ -1,4 +1,4 @@
-/** 公式簿页面专用的 operator_final_atk 序列化 AST。 */
+/** 公式簿页面专用的 char_final_atk 序列化 AST。 */
 
 /** 当前 FormulaBook AST 支持的运算符字符串。 */
 export type FormulaAstOperator =
@@ -54,12 +54,14 @@ export type FormulaAstNode =
 
 /** formula-book.json 的单公式契约。 */
 export interface FormulaBookPageData {
-  /** 唯一展示的 operator_final_atk 根节点。 */
+  /** 唯一展示的 char_final_atk 根节点。 */
   formula: FormulaAstFormulaNode;
+  /** 全部可写乘区的 FormulaZoneId 中文源码注释。 */
+  writableZoneComments: Record<string, string>;
   /** 生成数据对应的源码路径。 */
   source: string;
   /** 当前单公式 AST 格式版本。 */
-  schemaVersion: 3;
+  schemaVersion: 4;
 }
 
 /** 加载生成阶段从 FormulaBook 源码导出的唯一公式。 */
@@ -73,7 +75,8 @@ export async function loadFormulaBookPage(): Promise<FormulaBookPageData> {
 export function collectFormulaZoneComments(
   data: FormulaBookPageData,
 ): Readonly<Record<string, string>> {
-  const comments: Record<string, string> = {};
+  // 索引覆盖不在 char_final_atk AST 中的防御力、生命等可写乘区。
+  const comments: Record<string, string> = { ...data.writableZoneComments };
   function visit(node: FormulaAstNode): void {
     if (node.kind === 'item') return;
     if (node.kind === 'formula') {

@@ -1,4 +1,4 @@
-/** 只加载并展示 operator_final_atk 的公式簿页面。 */
+/** 只加载并展示 char_final_atk 的公式簿页面。 */
 
 'use client';
 

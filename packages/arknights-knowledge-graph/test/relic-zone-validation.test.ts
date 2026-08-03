@@ -42,11 +42,11 @@ describe("buildFormulaRelicZoneValidationArtifact", () => {
     const result = buildFormulaRelicZoneValidationArtifact(classified);
     expect(result.producer.activationPolicy).toBe("assume_active");
     expect(result.producer.numericEvaluation).toBe(false);
-    expect(result.items[0]?.zones).toEqual([FormulaZoneId.operator_out_atk_mul]);
+    expect(result.items[0]?.zones).toEqual([FormulaZoneId.char_out_atk_mul]);
     expect(result.items[0]?.effects[0]?.evidenceStatuses).toEqual(["inferred"]);
   });
 
-  it("攻击速度效果携带 atk=0 时 graph 基线与 formula 都保持空乘区", () => {
+  it("攻击速度效果携带 atk=0 时 graph 与 formula 都只输出攻速乘区", () => {
     const classified = buildRelicZoneTable({
       topicId: "rogue_2",
       topicName: "傀影与猩红孤钻",
@@ -81,9 +81,52 @@ describe("buildFormulaRelicZoneValidationArtifact", () => {
     });
 
     const result = buildFormulaRelicZoneValidationArtifact(classified);
-    expect(classified.items[0]?.zones).toEqual([]);
-    expect(result.items[0]?.zones).toEqual([]);
-    expect(result.items[0]?.effects[0]?.classification).toBe("unknown");
-    expect(result.items[0]?.effects[0]?.predictions).toEqual([]);
+    expect(classified.items[0]?.zones).toEqual([FormulaZoneId.char_direct_attack_speed_add]);
+    expect(result.items[0]?.zones).toEqual([FormulaZoneId.char_direct_attack_speed_add]);
+    expect(result.items[0]?.effects[0]?.classification).toBe("predicted");
+    expect(result.items[0]?.effects[0]?.predictions).toEqual([
+      expect.objectContaining({
+        zoneId: FormulaZoneId.char_direct_attack_speed_add,
+        ruleId: "attack-speed-conditional-addition",
+      }),
+    ]);
+  });
+
+  it("防御力效果输出 FormulaBook 的真实乘区", () => {
+    const classified = buildRelicZoneTable({
+      topicId: "rogue_test",
+      topicName: "测试主题",
+      generatedAt: "2026-01-01T00:00:00.000Z",
+      mechanicIndex: buildMechanicIndex({}),
+      detail: {
+        items: {
+          defense_relic: {
+            id: "defense_relic",
+            name: "防御藏品",
+            usage: "所有干员防御力提升",
+            description: null,
+            rarity: "NORMAL",
+            sortId: 1,
+            type: "RELIC",
+          },
+        },
+        relics: {
+          defense_relic: {
+            buffs: [{
+              key: "char_attribute_mul",
+              blackboard: [{ key: "def", value: 0.2, valueStr: null }],
+            }],
+          },
+        },
+        charBuffData: {},
+      },
+    });
+
+    const result = buildFormulaRelicZoneValidationArtifact(classified);
+    expect(classified.items[0]?.zones).toEqual([FormulaZoneId.char_out_def_mul]);
+    expect(result.items[0]?.zones).toEqual([FormulaZoneId.char_out_def_mul]);
+    expect(result.items[0]?.effects[0]?.predictions[0]?.zoneId).toBe(
+      FormulaZoneId.char_out_def_mul,
+    );
   });
 });

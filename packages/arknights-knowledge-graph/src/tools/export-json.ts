@@ -14,9 +14,10 @@ import {
   type TopicDetailForClassify,
 } from "../lib/classify/index.js";
 import {
-  FormulaZoneId,
+  FormulaBook,
   type FormulaWritableZoneId,
 } from "../lib/formula/formula-book.js";
+import { FormulaZoneExpression } from "../lib/formula/ast.js";
 import {
   buildFormulaRelicZoneValidationArtifact,
   type RelicZoneValidationArtifact,
@@ -96,24 +97,21 @@ function groupGraphRows(rows: Record<string, unknown>[]): Map<string, GraphEffec
   return grouped;
 }
 
-/** 当前攻击力版本允许出现在图谱校验产物中的真实可写 zone。 */
-const ATTACK_ZONE_IDS = new Set<FormulaWritableZoneId>([
-  FormulaZoneId.operator_base_atk,
-  FormulaZoneId.operator_out_atk_add,
-  FormulaZoneId.operator_out_atk_mul,
-  FormulaZoneId.operator_in_atk_add,
-  FormulaZoneId.operator_in_atk_mul,
-  FormulaZoneId.operator_final_atk_add,
-]);
+/** 从 FormulaBook 本身提取图谱校验允许导出的真实可写 zone。 */
+const WRITABLE_ZONE_IDS = new Set<FormulaWritableZoneId>(
+  Object.values(new FormulaBook().zones)
+    .filter((zone): zone is FormulaZoneExpression => zone instanceof FormulaZoneExpression)
+    .map((zone) => zone.zoneId as FormulaWritableZoneId),
+);
 
-/** 判断 Kuzu 松散字符串是否仍属于当前 FormulaBook 的攻击力可写 zone。 */
-function isAttackZoneId(value: string): value is FormulaWritableZoneId {
-  return ATTACK_ZONE_IDS.has(value as FormulaWritableZoneId);
+/** 判断 Kuzu 松散字符串是否仍属于当前 FormulaBook 的真实可写 zone。 */
+function isWritableZoneId(value: string): value is FormulaWritableZoneId {
+  return WRITABLE_ZONE_IDS.has(value as FormulaWritableZoneId);
 }
 
-/** 将图中的一条映射边转换为当前攻击力 JSON 预测结构。 */
+/** 将图中的一条映射边转换为当前属性 JSON 预测结构。 */
 function exportPrediction(row: GraphEffectRow): ExportedZonePrediction | null {
-  if (!isAttackZoneId(row.zoneId)) return null;
+  if (!isWritableZoneId(row.zoneId)) return null;
   const status = row.status === "verified" || row.status === "inferred"
     ? row.status
     : "unknown";

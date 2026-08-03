@@ -9,13 +9,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Search, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
-/** 当前 FormulaBook 攻击力乘区的文档展示引用。 */
+/** 当前 FormulaBook 属性乘区的文档展示引用。 */
 interface RelicZoneRef {
   id: string;
   name: string;
 }
 
-/** 当前攻击力校验产物中的单条乘区预测及其证据。 */
+/** 当前属性校验产物中的单条乘区预测及其证据。 */
 interface RelicZonePrediction {
   zoneId: string;
   ruleId: string;
@@ -32,7 +32,7 @@ interface RelicZoneBlackboardEntry {
   valueStr: string | null;
 }
 
-/** 当前攻击力校验产物中的单个 buff 效果。 */
+/** 当前属性校验产物中的单个 buff 效果。 */
 interface RelicZoneEffect {
   effectId: string;
   key: string;
@@ -41,7 +41,7 @@ interface RelicZoneEffect {
   jsonPath: string;
 }
 
-/** 当前攻击力校验产物中的藏品记录。 */
+/** 当前属性校验产物中的藏品记录。 */
 interface RelicZoneItem {
   id: string;
   name: string;
@@ -65,9 +65,10 @@ interface FormulaBookNode {
   zoneId?: string;
 }
 
-/** 公式簿 JSON 只暴露 operator_final_atk 根公式。 */
+/** 公式簿 JSON 暴露 char_final_atk 根公式与全部可写乘区注释。 */
 interface FormulaBookPayload {
   formula: FormulaBookNode;
+  writableZoneComments: Record<string, string>;
 }
 
 /** 稀疏 human 文件中的单 effect 修正。 */
@@ -118,8 +119,11 @@ function zoneSignature(zones: readonly string[]): string {
   return [...new Set(zones)].sort().join('|');
 }
 
-/** 从 operator_final_atk 递归公式中收集 FormulaZoneId 的中文注释。 */
-function collectFormulaZoneComments(node: FormulaBookNode, target: Record<string, string> = {}): Record<string, string> {
+/** 从注释索引和 char_final_atk 递归公式中收集 FormulaZoneId 中文名。 */
+function collectFormulaZoneComments(
+  node: FormulaBookNode,
+  target: Record<string, string> = {},
+): Record<string, string> {
   const id = node.zoneId ?? node.id;
   if (id && node.comment) target[id] = node.comment;
   if (node.expression) collectFormulaZoneComments(node.expression, target);
@@ -151,7 +155,7 @@ function buildZoneIndex(comments: Readonly<Record<string, string>>, ...datasets:
 /** 将 human 的乘区 ID 转为可展示引用；未知 ID 保留原文而不静默丢弃。 */
 function resolveZoneIds(ids: readonly string[], zoneIndex: ReadonlyMap<string, RelicZoneRef>): RelicZoneRef[] {
   return [...new Set(ids)].map(
-    (id) => zoneIndex.get(id) ?? { id, name: '未知攻击力乘区' },
+    (id) => zoneIndex.get(id) ?? { id, name: '未知属性乘区' },
   );
 }
 
@@ -310,7 +314,11 @@ export function RelicZoneValidationTable({ topicId, className }: RelicZoneValida
         setGraph(graphData as RelicZoneTableData);
         setFormula(formulaData as RelicZoneTableData);
         setHuman(humanData as HumanRelicZoneArtifact);
-        setZoneComments(collectFormulaZoneComments((formulaBookData as FormulaBookPayload).formula));
+        const formulaBook = formulaBookData as FormulaBookPayload;
+        setZoneComments(collectFormulaZoneComments(
+          formulaBook.formula,
+          { ...formulaBook.writableZoneComments },
+        ));
       })
       .catch((error: unknown) => {
         if (cancelled) return;

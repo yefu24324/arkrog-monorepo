@@ -1,4 +1,4 @@
-/** 当前攻击力版本的藏品路由、筛选和 FormulaBook 预览表。 */
+/** 当前属性版本的藏品路由、筛选和 FormulaBook 预览表。 */
 
 'use client';
 
@@ -20,17 +20,17 @@ import {
   loadFormulaBookPage,
 } from '../lib/formula-book-runtime';
 
-/** 无攻击力 zone 的筛选占位 ID。 */
+/** 无属性 zone 的筛选占位 ID。 */
 const ZONE_FILTER_NONE = '__none__';
 
-/** 单条原始 buff 的当前攻击力路由结果。 */
+/** 单条原始 buff 的当前属性路由结果。 */
 interface RoutedRelicEffect {
   buffIndex: number;
   route: RelicBuffZoneRoute;
   source: string;
 }
 
-/** 一件包装藏品及其现场路由得到的攻击力分析。 */
+/** 一件包装藏品及其现场路由得到的属性分析。 */
 interface RoutedRelicItem {
   effects: RoutedRelicEffect[];
   item: WrappedRelicItem;
@@ -50,7 +50,7 @@ interface TopicLoadState {
   error: string | null;
 }
 
-/** 对一件包装藏品的直接 buff 和 charBuffData 现场执行攻击力路由。 */
+/** 对一件包装藏品的直接 buff 和 charBuffData 现场执行属性路由。 */
 function routeWrappedRelic(item: WrappedRelicItem, topicId: string): RoutedRelicItem {
   const effects: RoutedRelicEffect[] = [];
   item.relic.buffs.forEach((buff, buffIndex) => {
@@ -126,7 +126,7 @@ function matchesZones(entry: RoutedRelicItem, selected: ReadonlySet<string>): bo
   return true;
 }
 
-/** 使用 FormulaZoneId 注释显示一个或多个攻击力 zone。 */
+/** 使用 FormulaZoneId 注释显示一个或多个属性 zone。 */
 function ZoneBadges({
   zones,
   comments,
@@ -298,7 +298,7 @@ function RelicRow({
   );
 }
 
-/** 攻击力藏品乘区表。 */
+/** 属性藏品乘区表。 */
 export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
   const [wrappedRelics, setWrappedRelics] = useState<WrappedRelicItem[]>([]);
   const [topicName, setTopicName] = useState(topicId);
@@ -373,7 +373,7 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
   const allFilteredSelected = filtered.length > 0
     && filtered.every((entry) => selectedRelicIdSet.has(entry.item.id));
 
-  /** 切换一个攻击力 zone 筛选。 */
+  /** 切换一个属性 zone 筛选。 */
   function toggleZone(zoneId: string) {
     setSelectedZoneIds((previous) => previous.includes(zoneId)
       ? previous.filter((id) => id !== zoneId)
@@ -421,7 +421,7 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
   if (loading) {
     return (
       <div className={cn('not-prose my-6 rounded-2xl border px-4 py-10 text-center text-sm text-fd-muted-foreground', className)}>
-        正在分析攻击力藏品…
+        正在分析属性藏品…
       </div>
     );
   }
@@ -439,7 +439,7 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
           <div>
             <h2 className="text-base font-semibold">{topicName}</h2>
             <p className="mt-1 text-xs text-fd-muted-foreground">
-              攻击力版本 · 显示 {filtered.length} / {routedItems.length} 件 · 已选 {selectedRelicIds.length} 件
+              属性版本 · 显示 {filtered.length} / {routedItems.length} 件 · 已选 {selectedRelicIds.length} 件
             </p>
           </div>
           <label className="relative block w-full max-w-md">
@@ -447,7 +447,7 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="搜索藏品、buff、黑板或攻击力乘区…"
+              placeholder="搜索藏品、buff、黑板或属性乘区…"
               className="w-full rounded-xl border bg-fd-background py-2 pr-9 pl-9 text-sm outline-none focus:border-fd-primary"
             />
             {query ? (
@@ -472,7 +472,7 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
               selectedZones.has(ZONE_FILTER_NONE) && 'border-fd-primary bg-fd-primary/10 text-fd-primary',
             )}
           >
-            无攻击力乘区
+            无属性乘区
           </button>
           {availableZones.map((zoneId) => (
             <button
@@ -511,7 +511,7 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
                 <th className="w-10 px-3 py-2.5" aria-hidden />
                 <th className="w-[20%] px-3 py-2.5 font-medium">藏品</th>
                 <th className="px-3 py-2.5 font-medium">原文</th>
-                <th className="w-[28%] px-3 py-2.5 font-medium">攻击力乘区</th>
+                <th className="w-[28%] px-3 py-2.5 font-medium">属性乘区</th>
               </tr>
             </thead>
             <tbody>
