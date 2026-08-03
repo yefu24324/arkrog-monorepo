@@ -112,16 +112,16 @@ pnpm graph:build
 
 用户要求新增或修正规则时先读取：
 
-- `packages/arknights-knowledge-graph/src/lib/domain/damage-zones.ts`
+- `packages/arknights-knowledge-graph/src/lib/formula/formula-book.ts`
 - `packages/arknights-knowledge-graph/src/lib/domain/engine-rules.ts`
 - `packages/arknights-knowledge-graph/test/damage-zones.test.ts`
 - 对应 GameData、战斗模板和 `docs/game/knowledge-graph/relic-zone-expectations.json`
 
 对外纯 TS 在 `src/lib/`；Kuzu/CLI/export 在 `src/tools/`。
-藏品进公式簿：`src/lib/formula/relic-programs.ts`（`routeRelicBuffToZones` / `applyRelicBuffsToFormulaContext`），不生成按藏品 ID 总表。
+藏品进公式簿：`src/lib/mechanics/relic-programs.ts`（`routeRelicBuffToZones` / `applyRelicBuffsToFormulaContext`），不生成按藏品 ID 总表。
 
 
-每条规则必须包含稳定 ID、`version`、目标乘区、`status`、`confidence`、说明和声明式条件。修改已有语义时递增版本。`damage-zones.ts` 只定义公式乘区，不参与推断。代码必须添加中文注释。
+每条规则必须包含稳定 ID、`version`、目标乘区、`status`、`confidence`、说明和声明式条件。修改已有语义时递增版本。`formula-book.ts` 是乘区 ID 与公式 AST 的唯一来源，不允许领域层再定义兼容乘区。代码必须添加中文注释。
 
 修改后依次运行：
 

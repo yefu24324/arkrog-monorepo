@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/prettierrc",
+  "semi": true,
+  "singleQuote": false,
+  "arrowParens": "always",
+  "bracketSpacing": true,
+  "tabWidth": 2,
+  "printWidth": 120,
+  "overrides": [
+    {
+      "files": "packages/arknights-knowledge-graph/src/lib/formula/formula-book.ts",
+      "options": {
+        "printWidth": 160
+      }
+    }
+  ]
+}
