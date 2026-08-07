@@ -1,4 +1,4 @@
-/** 只加载并展示 char_final_atk 的公式簿页面。 */
+/** 加载并展示全部最终属性公式的公式簿页面。 */
 
 'use client';
 
@@ -9,7 +9,7 @@ import {
   type FormulaBookPageData,
 } from '../lib/formula-book-runtime';
 
-/** 公式簿页面仅负责加载生成后的单公式 AST。 */
+/** 公式簿页面负责加载生成后的最终公式 AST 列表。 */
 export function FormulaBookExplorer() {
   const [data, setData] = useState<FormulaBookPageData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -45,5 +45,11 @@ export function FormulaBookExplorer() {
     );
   }
 
-  return <AdvancedFormula formula={data.formula} />;
+  return (
+    <div className="not-prose space-y-6">
+      {data.formulas.map((formula) => (
+        <AdvancedFormula key={formula.id} formula={formula} />
+      ))}
+    </div>
+  );
 }

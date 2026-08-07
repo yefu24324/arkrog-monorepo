@@ -1,0 +1,36 @@
+{
+  "name": "@arkrog/arknights-gamedata-report",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#*": "./src/*.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./gamedata-report/*": "./dist/gamedata-report/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "dist/gamedata-report",
+    "README.md"
+  ],
+  "bin": {
+    "arknights-gamedata-report": "./src/cli.ts"
+  },
+  "scripts": {
+    "report:gamedata-report": "node src/cli.ts --out dist/gamedata-report",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@arkrog/arknights-schema": "workspace:*",
+    "tiny-pinyin": "^1.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.4"
+  }
+}

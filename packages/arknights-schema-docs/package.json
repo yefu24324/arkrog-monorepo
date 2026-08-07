@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "graph:build": "pnpm --filter @arkrog/arknights-knowledge-graph build",
-    "docs:generate": "pnpm --filter @arkrog/arknights-schema relics:export -- --out packages/arknights-schema-docs/public/data && pnpm graph:build && tsx scripts/generate-docs.ts",
+    "docs:generate": "arknights-gamedata-report --out public/gamedata-report && pnpm graph:build && tsx scripts/generate-docs.ts",
     "predev": "pnpm docs:generate",
     "dev": "next dev",
     "prebuild": "pnpm docs:generate && fumadocs-mdx",
@@ -16,6 +16,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@arkrog/arknights-gamedata-report": "workspace:*",
     "@arkrog/arknights-knowledge-graph": "workspace:*",
     "@arkrog/arknights-schema": "workspace:*",
     "@base-ui/react": "^1.6.0",

@@ -1,0 +1,4 @@
+interface:
+  display_name: "维护 GameData Report"
+  short_description: "维护明日方舟报告的导出结构、类型定义、生成数据与消费链路"
+  default_prompt: "使用 $arknights-gamedata-report 检查游戏数据变化并安全更新报告导出。"

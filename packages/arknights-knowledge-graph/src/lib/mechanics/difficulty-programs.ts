@@ -23,14 +23,14 @@ import {
   routeRelicBuffToZones,
   type RelicBuffZoneRoute,
 } from "./relic-programs.js";
-import type { ExportedRogueDifficultyConditionalRelic } from "@arkrog/arknights-schema/game-data";
+import type { ExportedRogueDifficultyConditionalRelic } from "@arkrog/arknights-gamedata-report";
 import {
   applyManualTopicRulesToFormulaContext,
   getManualTopicDifficultyEffects,
   type ManualTopicDifficultyEffect,
 } from "./topic-rule-programs.js";
 
-/** formula 需要的原始难度最小结构；可直接传 relics:export 的 difficulty。 */
+/** formula 需要的原始难度最小结构；可直接传 GameData 报告的 difficulty。 */
 export interface RogueDifficultyForFormula {
   /** 原始模式枚举。 */
   modeDifficulty: string;
@@ -100,7 +100,7 @@ export interface ApplyRogueDifficultyInput {
   selectedDifficulty: RogueDifficultyForFormula | null;
   /** 当前敌人、关卡和时间事实。 */
   activation?: FormulaActivationContext;
-  /** relics:export 提取的难度条件藏品与遗留支援。 */
+  /** GameData 报告提取的难度条件藏品与遗留支援。 */
   conditionalRelics?: readonly ExportedRogueDifficultyConditionalRelic[];
   /** 用户确认已经满足并选择的条件藏品关联 ID。 */
   enabledConditionalRelicIds?: readonly string[];
@@ -228,7 +228,7 @@ export function routeSelectedRogueDifficultyToZones(input: {
   difficulties: readonly RogueDifficultyForFormula[];
   /** 用户单选难度。 */
   selectedDifficulty: RogueDifficultyForFormula | null;
-  /** relics:export 提取的难度条件藏品与遗留支援。 */
+  /** GameData 报告提取的难度条件藏品与遗留支援。 */
   conditionalRelics?: readonly ExportedRogueDifficultyConditionalRelic[];
 }): SelectedRogueDifficultyZoneRoute {
   const routes = selectCumulativeRogueDifficulties(

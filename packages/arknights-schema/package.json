@@ -15,10 +15,6 @@
     "./schemas": {
       "types": "./dist/schemas/index.d.ts",
       "import": "./dist/schemas/index.js"
-    },
-    "./game-data": {
-      "types": "./dist/game-data/index.d.ts",
-      "import": "./dist/game-data/index.js"
     }
   },
   "files": [
@@ -33,11 +29,9 @@
     "data:generate": "pnpm data:bootstrap",
     "data:analyze": "tsx tools/analyze-json.ts",
     "data:inspect": "tsx tools/analyze-json.ts --all",
-    "data:validate": "tsx tools/validate-roguelike-topic.ts",
-    "relics:export": "tsx tools/export-game-data.ts"
+    "data:validate": "tsx tools/validate-roguelike-topic.ts"
   },
   "dependencies": {
-    "tiny-pinyin": "^1.3.2",
     "zod": "^4.0.0"
   },
   "devDependencies": {

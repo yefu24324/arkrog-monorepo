@@ -65,9 +65,9 @@ interface FormulaBookNode {
   zoneId?: string;
 }
 
-/** 公式簿 JSON 暴露 char_final_atk 根公式与全部可写乘区注释。 */
+/** 公式簿 JSON 暴露全部最终公式与可写乘区注释。 */
 interface FormulaBookPayload {
-  formula: FormulaBookNode;
+  formulas: FormulaBookNode[];
   writableZoneComments: Record<string, string>;
 }
 
@@ -119,7 +119,7 @@ function zoneSignature(zones: readonly string[]): string {
   return [...new Set(zones)].sort().join('|');
 }
 
-/** 从注释索引和 char_final_atk 递归公式中收集 FormulaZoneId 中文名。 */
+/** 从注释索引和最终公式 AST 中收集 FormulaZoneId 中文名。 */
 function collectFormulaZoneComments(
   node: FormulaBookNode,
   target: Record<string, string> = {},
@@ -315,10 +315,11 @@ export function RelicZoneValidationTable({ topicId, className }: RelicZoneValida
         setFormula(formulaData as RelicZoneTableData);
         setHuman(humanData as HumanRelicZoneArtifact);
         const formulaBook = formulaBookData as FormulaBookPayload;
-        setZoneComments(collectFormulaZoneComments(
-          formulaBook.formula,
-          { ...formulaBook.writableZoneComments },
-        ));
+        const zoneComments = { ...formulaBook.writableZoneComments };
+        for (const formula of formulaBook.formulas ?? []) {
+          collectFormulaZoneComments(formula, zoneComments);
+        }
+        setZoneComments(zoneComments);
       })
       .catch((error: unknown) => {
         if (cancelled) return;

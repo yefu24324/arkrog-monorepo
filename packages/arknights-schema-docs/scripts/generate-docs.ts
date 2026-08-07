@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
-import type { ExportedOperatorIndexArtifact } from "@arkrog/arknights-schema/game-data";
+import type { ExportedOperatorIndex } from "@arkrog/arknights-gamedata-report";
 
 import type { FormulaExpression } from "../../arknights-knowledge-graph/src/lib/formula/ast.js";
 import {
@@ -39,7 +39,6 @@ const RELIC_VALIDATION_DATA_ROOT = path.resolve(
   "data",
   "relic-zone-validation",
 );
-const OPERATORS_DATA_ROOT = path.resolve(PACKAGE_ROOT, "public", "data", "operators");
 const ENEMIES_DATA_ROOT = path.resolve(PACKAGE_ROOT, "public", "data", "enemies");
 const FORMULA_BOOK_CONTENT_PATH = path.resolve(CONTENT_ROOT, "formula-book.mdx");
 const FORMULA_BOOK_DATA_PATH = path.resolve(PACKAGE_ROOT, "public", "data", "formula-book.json");
@@ -53,7 +52,7 @@ const FORMULA_BOOK_SOURCE_PATH = path.resolve(
   "formula-book.ts",
 );
 const GENERATED_ROOT = path.resolve(PACKAGE_ROOT, "generated");
-/** relics:export 生成的干员目录和 GameData 敌人表，用于战斗预览面板。 */
+/** GameData 报告生成的干员目录和原始敌人表，用于战斗预览面板。 */
 const ENEMY_DATABASE_PATH = path.resolve(
   REPO_ROOT,
   "ArknightsGameData",
@@ -752,7 +751,7 @@ ${cards}
     对照 Kuzu 图谱、公式贡献函数与稀疏 human 人工修正
   </Card>
   <Card title="公式簿" href="/docs/formula-book">
-    char_final_atk
+    干员与敌人最终属性公式
   </Card>
 </Cards>
 `;
@@ -843,16 +842,26 @@ function serializeFormulaExpression(
   };
 }
 
-/** 从当前 FormulaBook 生成攻击力 AST 与全部可写乘区注释索引。 */
+/** 公式簿页面只展示各属性链路的最终派生公式。 */
+const FINAL_FORMULA_IDS = [
+  FormulaZoneId.char_final_max_hp,
+  FormulaZoneId.char_final_atk,
+  FormulaZoneId.char_final_attack_speed,
+  FormulaZoneId.char_final_def,
+  FormulaZoneId.enemy_final_max_hp,
+  FormulaZoneId.enemy_final_atk,
+  FormulaZoneId.enemy_final_def,
+  FormulaZoneId.enemy_final_magic_resist,
+] as const;
+
+/** 从当前 FormulaBook 生成全部最终公式 AST 与可写乘区注释索引。 */
 function writeFormulaBookPage(): number {
   const book = new FormulaBook();
   const comments = readFormulaZoneComments();
-  const formula = book.get_zone(FormulaZoneId.char_final_atk);
-  const serializedFormula = serializeFormulaExpression(
-    formula,
-    comments,
+  const formulas = FINAL_FORMULA_IDS.map((id) =>
+    serializeFormulaExpression(book.get_zone(id), comments),
   );
-  // 藏品表需要显示不属于攻击力 AST 的防御力、生命等可写乘区中文名。
+  // 藏品表需要显示不属于任一最终公式 AST 的可写乘区中文名。
   const writableZoneComments = Object.fromEntries(
     Object.values(book.zones)
       .filter((expression) => expression.kind === "zone")
@@ -863,9 +872,9 @@ function writeFormulaBookPage(): number {
       }),
   );
   const data = {
-    schemaVersion: 4,
+    schemaVersion: 5,
     source: "packages/arknights-knowledge-graph/src/lib/formula/formula-book.ts",
-    formula: serializedFormula,
+    formulas,
     writableZoneComments,
   };
   fs.mkdirSync(path.dirname(FORMULA_BOOK_DATA_PATH), { recursive: true });
@@ -880,7 +889,7 @@ title: 公式簿
 `,
     "utf8",
   );
-  return 1;
+  return formulas.length;
 }
 
 /** 同步藏品乘区 JSON，并生成主题页面。 */
@@ -908,7 +917,7 @@ title: 藏品乘区
 description: 按肉鸽主题选择难度，并浏览藏品原文、加成乘区与 buffs 原数据
 ---
 
-由 \`pnpm graph:export\` 导出的 Kuzu graph 藏品乘区，与 Kuzu 同源难度规则共同驱动。难度表读取 \`relics:export\` 的原始主题数据；无法由客户端事实验证的难度机制明确保留为 unknown。
+由 \`pnpm graph:export\` 导出的 Kuzu graph 藏品乘区，与 Kuzu 同源难度规则共同驱动。难度表读取 GameData 报告的原始主题数据；无法由客户端事实验证的难度机制明确保留为 unknown。
 
 <Cards>
 ${cards || '  <Card title="暂无数据">请先运行 graph:export</Card>'}
@@ -1059,17 +1068,17 @@ function unwrapDefinedData(value: unknown): unknown {
   return result;
 }
 
-/** 读取 relics:export 已生成的干员目录数量，不再覆盖完整干员文件。 */
+/** 读取已复制的 GameData 报告干员目录数量，不再覆盖完整干员文件。 */
 function countExportedOperators(): number {
-  const indexPath = path.resolve(OPERATORS_DATA_ROOT, "index.json");
+  const indexPath = path.resolve(PACKAGE_ROOT, "public", "gamedata-report", "operators.json");
   if (!fs.existsSync(indexPath)) {
-    throw new Error(`未找到 relics:export 干员目录：${indexPath}`);
+    throw new Error(`未找到 GameData 报告干员目录：${indexPath}`);
   }
-  const index = JSON.parse(fs.readFileSync(indexPath, "utf8")) as ExportedOperatorIndexArtifact;
-  if (index.schemaVersion !== 1 || index.count !== index.items.length) {
-    throw new Error(`relics:export 干员目录格式无效：${indexPath}`);
+  const index = JSON.parse(fs.readFileSync(indexPath, "utf8")) as ExportedOperatorIndex;
+  if (!Array.isArray(index)) {
+    throw new Error(`GameData 报告干员目录格式无效：${indexPath}`);
   }
-  return index.count;
+  return index.length;
 }
 
 /** 选择器用敌人目录条目。 */

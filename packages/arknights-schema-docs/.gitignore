@@ -17,6 +17,7 @@
 /public/data/wrapped-relics
 /public/data/relics
 /public/data/roguelike
+/public/gamedata-report
 /generated
 
 # 由 scripts/generate-docs.ts 从 TypeScript/JSDoc 与 graph:export 组装

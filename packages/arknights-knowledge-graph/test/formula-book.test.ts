@@ -26,13 +26,13 @@ function createAttackBook(): FormulaBook {
 }
 
 describe("当前 FormulaBook 运行时", () => {
-  it("从统一索引区分三十二个 zone 和十三个派生 formula", () => {
+  it("从统一索引区分四十四个 zone 和十八个派生 formula", () => {
     const expressions = Object.values(new FormulaBook().zones);
 
-    // 敌方攻击、防御和法抗各自包含基础、直接和最终三个可写 zone。
-    expect(expressions).toHaveLength(45);
-    expect(expressions.filter((entry) => entry instanceof FormulaZoneExpression)).toHaveLength(32);
-    expect(expressions.filter((entry) => entry instanceof FormulaNodeExpression)).toHaveLength(13);
+    // 四种敌方承伤放大各自新增易伤、脆弱和独立增幅三个可写 zone，以及一个派生公式。
+    expect(expressions).toHaveLength(62);
+    expect(expressions.filter((entry) => entry instanceof FormulaZoneExpression)).toHaveLength(44);
+    expect(expressions.filter((entry) => entry instanceof FormulaNodeExpression)).toHaveLength(18);
   });
 
   it("藏品可以直接向 book 中的 zone 追加 item", () => {
@@ -105,6 +105,48 @@ describe("当前 FormulaBook 运行时", () => {
     expect(book.calculate(FormulaZoneId.char_out_def)).toBeCloseTo(720);
     expect(book.calculate(FormulaZoneId.char_in_def)).toBeCloseTo(1_001);
     expect(book.calculate(FormulaZoneId.char_final_def)).toBeCloseTo(1_021);
+  });
+
+  it("四种敌方承伤放大都按易伤加算、脆弱取最高和独立增幅相乘", () => {
+    const cases = [
+      {
+        taken: FormulaZoneId.enemy_phy_taken_add,
+        fragile: FormulaZoneId.enemy_phy_fragile,
+        damage: FormulaZoneId.enemy_phy_damage_mul,
+        final: FormulaZoneId.enemy_final_phy_damage_scale,
+      },
+      {
+        taken: FormulaZoneId.enemy_mag_taken_add,
+        fragile: FormulaZoneId.enemy_mag_fragile,
+        damage: FormulaZoneId.enemy_mag_damage_mul,
+        final: FormulaZoneId.enemy_final_mag_damage_scale,
+      },
+      {
+        taken: FormulaZoneId.enemy_pure_taken_add,
+        fragile: FormulaZoneId.enemy_pure_fragile,
+        damage: FormulaZoneId.enemy_pure_damage_mul,
+        final: FormulaZoneId.enemy_final_pure_damage_scale,
+      },
+      {
+        taken: FormulaZoneId.enemy_ep_taken_add,
+        fragile: FormulaZoneId.enemy_ep_fragile,
+        damage: FormulaZoneId.enemy_ep_damage_mul,
+        final: FormulaZoneId.enemy_final_ep_damage_scale,
+      },
+    ] as const;
+
+    for (const zoneIds of cases) {
+      const book = new FormulaBook()
+        .add_item(zoneIds.taken, item("第一份易伤", 0.2))
+        .add_item(zoneIds.taken, item("第二份易伤", 0.1))
+        .add_item(zoneIds.fragile, item("较低脆弱", 1.1))
+        .add_item(zoneIds.fragile, item("较高脆弱", 1.5))
+        .add_item(zoneIds.damage, item("第一份独立增幅", 1.2))
+        .add_item(zoneIds.damage, item("第二份独立增幅", 1.3));
+
+      // (1 + 0.2 + 0.1) × max(1, 1.1, 1.5) × 1.2 × 1.3 = 3.042。
+      expect(book.calculate(zoneIds.final)).toBeCloseTo(3.042);
+    }
   });
 
   it("按基础值与直接加成计算干员最终攻击速度", () => {

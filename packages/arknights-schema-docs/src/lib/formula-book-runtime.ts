@@ -1,4 +1,4 @@
-/** 公式簿页面专用的 char_final_atk 序列化 AST。 */
+/** 公式簿页面专用的最终属性公式序列化 AST。 */
 
 /** 当前 FormulaBook AST 支持的运算符字符串。 */
 export type FormulaAstOperator =
@@ -52,30 +52,30 @@ export type FormulaAstNode =
   | FormulaAstZoneNode
   | FormulaAstFormulaNode;
 
-/** formula-book.json 的单公式契约。 */
+/** formula-book.json 的多最终公式契约。 */
 export interface FormulaBookPageData {
-  /** 唯一展示的 char_final_atk 根节点。 */
-  formula: FormulaAstFormulaNode;
+  /** 全部最终属性公式根节点，按公式簿定义顺序。 */
+  formulas: FormulaAstFormulaNode[];
   /** 全部可写乘区的 FormulaZoneId 中文源码注释。 */
   writableZoneComments: Record<string, string>;
   /** 生成数据对应的源码路径。 */
   source: string;
-  /** 当前单公式 AST 格式版本。 */
-  schemaVersion: 4;
+  /** 当前多最终公式 AST 格式版本。 */
+  schemaVersion: 5;
 }
 
-/** 加载生成阶段从 FormulaBook 源码导出的唯一公式。 */
+/** 加载生成阶段从 FormulaBook 源码导出的最终公式。 */
 export async function loadFormulaBookPage(): Promise<FormulaBookPageData> {
   const response = await fetch('/data/formula-book.json');
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return (await response.json()) as FormulaBookPageData;
 }
 
-/** 从唯一公式递归收集 FormulaZoneId 注释，供藏品乘区表复用。 */
+/** 从全部最终公式递归收集 FormulaZoneId 注释，供藏品乘区表复用。 */
 export function collectFormulaZoneComments(
   data: FormulaBookPageData,
 ): Readonly<Record<string, string>> {
-  // 索引覆盖不在 char_final_atk AST 中的防御力、生命等可写乘区。
+  // 索引覆盖不在任一最终公式 AST 中的防御力、生命等可写乘区。
   const comments: Record<string, string> = { ...data.writableZoneComments };
   function visit(node: FormulaAstNode): void {
     if (node.kind === 'item') return;
@@ -89,6 +89,6 @@ export function collectFormulaZoneComments(
     }
     node.operands.forEach(visit);
   }
-  visit(data.formula);
+  data.formulas.forEach(visit);
   return comments;
 }

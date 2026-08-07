@@ -6,11 +6,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import type {
   ExportedOperatorArtifact,
-  ExportedOperatorIndexArtifact,
+  ExportedOperatorIndex,
   ExportedOperatorIndexItem,
   OriginalGameDataObject,
   WrappedRelicItem,
-} from '@arkrog/arknights-schema/game-data';
+} from '@arkrog/arknights-gamedata-report';
 import {
   FormulaBook,
   FormulaZoneId,
@@ -25,7 +25,7 @@ import {
 import { FormulaResultPopover } from './formula-expr-popover';
 import { cn } from '../lib/cn';
 
-/** 干员目录直接使用 relics:export 的轻量条目。 */
+/** 干员目录直接使用 GameData 报告的轻量条目。 */
 type OperatorIndexEntry = ExportedOperatorIndexItem;
 
 /** 计算属性所需的最高阶段干员数据。 */
@@ -285,9 +285,9 @@ export function CombatPreviewPanel({
   useEffect(() => {
     let cancelled = false;
     void Promise.all([
-      fetch('/data/operators/index.json').then(async (response) => {
+      fetch('/gamedata-report/operators.json').then(async (response) => {
         if (!response.ok) throw new Error(`operators HTTP ${response.status}`);
-        return (await response.json()) as ExportedOperatorIndexArtifact;
+        return (await response.json()) as ExportedOperatorIndex;
       }),
       fetch('/data/enemies/index.json').then(async (response) => {
         if (!response.ok) throw new Error(`enemies HTTP ${response.status}`);
@@ -295,7 +295,7 @@ export function CombatPreviewPanel({
       }),
     ]).then(([operators, enemies]) => {
       if (cancelled) return;
-      setOperatorIndex(operators.items ?? []);
+      setOperatorIndex(operators);
       setEnemyIndex(enemies.items ?? []);
       setLoading(false);
     }).catch((error: unknown) => {
@@ -311,7 +311,7 @@ export function CombatPreviewPanel({
   useEffect(() => {
     if (!operatorId) return;
     let cancelled = false;
-    void fetch(`/data/operators/${encodeURIComponent(operatorId)}.json`)
+    void fetch(`/gamedata-report/operators/${encodeURIComponent(operatorId)}.json`)
       .then(async (response) => {
         if (!response.ok) throw new Error(`operator HTTP ${response.status}`);
         return buildOperatorDetail((await response.json()) as ExportedOperatorArtifact);

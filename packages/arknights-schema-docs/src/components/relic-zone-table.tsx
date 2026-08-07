@@ -5,9 +5,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Search, X } from 'lucide-react';
 import type {
+  ExportedRelicsReport,
+  ExportedRoguelikeTopicReport,
   WrappedRelicItem,
-  WrappedRelicTopicArtifact,
-} from '@arkrog/arknights-schema/game-data';
+} from '@arkrog/arknights-gamedata-report';
 import type { FormulaWritableZoneId } from '@arkrog/arknights-knowledge-graph/formula';
 import {
   routeRelicBuffToZones,
@@ -316,15 +317,19 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
   useEffect(() => {
     let cancelled = false;
     void Promise.all([
-      fetch(`/data/relics/${topicId}.json`).then(async (response) => {
+      fetch(`/gamedata-report/roguelike/${topicId}/relics.json`).then(async (response) => {
         if (!response.ok) throw new Error(`relics HTTP ${response.status}`);
-        return (await response.json()) as WrappedRelicTopicArtifact;
+        return (await response.json()) as ExportedRelicsReport;
+      }),
+      fetch(`/gamedata-report/roguelike/${topicId}/topic.json`).then(async (response) => {
+        if (!response.ok) throw new Error(`topic HTTP ${response.status}`);
+        return (await response.json()) as ExportedRoguelikeTopicReport;
       }),
       loadFormulaBookPage(),
-    ]).then(([artifact, formulaData]) => {
+    ]).then(([relics, topicReport, formulaData]) => {
       if (cancelled) return;
-      setWrappedRelics(artifact.items ?? []);
-      setTopicName(artifact.topic.name);
+      setWrappedRelics(relics);
+      setTopicName(topicReport.topic.name);
       setZoneComments(collectFormulaZoneComments(formulaData));
       setSelectedZoneIds([]);
       setExpandedIds([]);

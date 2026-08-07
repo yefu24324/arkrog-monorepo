@@ -1,0 +1,38 @@
+name: PNPM PUBLISH
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 克隆代码
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 设置Node环境
+      - uses: pnpm/setup@v1
+        with:
+          version: 11.2.2
+          runtime: node@24
+          cache: true
+
+      # 安装依赖
+      - name: Install dependencies
+        run: pnpm i
+
+      # 编译
+      - name: Build
+        run: |
+          pnpm build
+          tar -czf arkrog-frontend-${{ github.ref_name }}.tgz -C build/client .
+
+      # 上传产物
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: arkrog-frontend-${{ github.ref_name }}.tgz

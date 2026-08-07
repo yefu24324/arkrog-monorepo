@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ExportedRogueDifficultyConditionalRelic } from "@arkrog/arknights-schema/game-data";
+import type { ExportedRogueDifficultyConditionalRelic } from "@arkrog/arknights-gamedata-report";
 
 import {
   FormulaZoneId,

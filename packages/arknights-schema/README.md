@@ -64,32 +64,9 @@ pnpm schema:docs:dev
 - 空数组被建模为 `never[]`，确保首次出现元素时能被变化检查捕获。
 - `buff_template_data` 中的递归 Action 按 CLR `$type` 建模为严格判别联合，嵌套节点通过惰性 Schema 闭环。
 
-## GameData 导出
+## GameData 报告
 
-纯 GameData 导出与 Kuzu 图谱命令完全分离。从 monorepo 根目录执行：
-
-```powershell
-pnpm relics:export
-pnpm relics:export --out D:\arkrog-data
-pnpm relics:export --out ./exports
-```
-
-命令始终导出全部藏品、肉鸽主题、关卡和干员，不接受范围或主题参数。`--out` 支持绝对路径；相对路径以 monorepo 根目录解析。缺省输出到 `docs/game/game-data`。
-
-```text
-<输出目录>/
-├─ relics/{topicId}.json
-├─ roguelike/
-│  ├─ topics/{topicId}.json
-│  └─ stages/{topicId}/{stageId}.json
-└─ operators/
-   ├─ index.json
-   └─ {operatorId}.json
-```
-
-- `relics`：按主题导出包装藏品，游戏原始数据位于 `relic` 与 `charBuffs`。
-- `topics`：聚合原始主题入口、`details.difficulties` 主难度、主题机制扩展，以及 `init_mode_relic` / `LEGACY force_add_choice` 到支援藏品的原始证据链。
-- `stages`：同时保留主题、关卡元数据、主 level JSON 和全部替换 level JSON。
-- `operators`：聚合完整角色等级帧、所有引用技能等级、模组及职业形态 patch；不含皮肤、语音和档案。
-
-本命令只读取 `ArknightsGameData/zh_CN/gamedata`，不连接、构建或查询 Kuzu。需要乘区验证时使用独立的 `pnpm graph:export`。
+分类 JSON 的聚合、类型契约与命令已迁移到独立包
+`@arkrog/arknights-gamedata-report`。本包只维护原始 GameData 的 TypeScript 类型与
+Zod Schema；需要刷新内置报告时从 monorepo 根目录执行
+`pnpm report:gamedata-report`。

@@ -33,6 +33,7 @@
     "graph:cypher": "tsx src/tools/cli.ts cypher"
   },
   "dependencies": {
+    "@arkrog/arknights-gamedata-report": "workspace:*",
     "@arkrog/arknights-schema": "workspace:*",
     "kuzu": "^0.11.3"
   },

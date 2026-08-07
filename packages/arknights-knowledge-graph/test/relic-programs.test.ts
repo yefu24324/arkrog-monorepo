@@ -1,4 +1,4 @@
-import type { WrappedRelicItem } from "@arkrog/arknights-schema/game-data";
+import type { WrappedRelicItem } from "@arkrog/arknights-gamedata-report";
 import { describe, expect, it } from "vitest";
 
 import { item } from "../src/lib/formula/ast.js";

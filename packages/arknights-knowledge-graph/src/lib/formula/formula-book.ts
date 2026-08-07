@@ -1,4 +1,4 @@
-import { formula, FormulaItemExpression, FormulaNodeExpression, FormulaZoneExpression, item, multiply, plus, zone } from "./ast.js";
+import { formula, FormulaItemExpression, FormulaNodeExpression, FormulaZoneExpression, item, max, multiply, plus, zone } from "./ast.js";
 
 /** FormulaBook 中全部命名乘区与派生公式的统一枚举。 */
 export enum FormulaZoneId {
@@ -45,6 +45,8 @@ export enum FormulaZoneId {
   char_base_attack_speed = "char_base_attack_speed",
   /** 干员直接攻击速度加成 */
   char_direct_attack_speed_add = "char_direct_attack_speed_add",
+  /** 干员最终攻击速度 */
+  char_final_attack_speed = "char_final_attack_speed",
   /// --------------我方/防御属性加成--------------
   /** 干员基础防御力 */
   char_base_def = "char_base_def",
@@ -100,6 +102,38 @@ export enum FormulaZoneId {
   enemy_final_magic_resist_mul = "enemy_final_magic_resist_mul",
   /** 敌人最终法抗 */
   enemy_final_magic_resist = "enemy_final_magic_resist",
+  /// --------------敌方/受到物理伤害放大--------------
+  /** 敌人物理易伤 */
+  enemy_phy_taken_add = "enemy_phy_taken_add",
+  /** 敌人物理脆弱 */
+  enemy_phy_fragile = "enemy_phy_fragile",
+  /** 物理伤害独立增幅 */
+  enemy_phy_damage_mul = "enemy_phy_damage_mul",
+  /** 敌人受到物理伤害放大 */
+  enemy_final_phy_damage_scale = "enemy_final_phy_damage_scale",
+  /// --------------敌方/受到法术伤害放大--------------
+  /** 敌人法术易伤 */
+  enemy_mag_taken_add = "enemy_mag_taken_add",
+  /** 敌人法术脆弱 */
+  enemy_mag_fragile = "enemy_mag_fragile",
+  /** 法术伤害独立增幅 */
+  enemy_mag_damage_mul = "enemy_mag_damage_mul",
+  /** 敌人受到法术伤害放大 */
+  enemy_final_mag_damage_scale = "enemy_final_mag_damage_scale",
+  /// --------------敌方/受到真实伤害放大--------------
+  /** 敌人真实易伤 */
+  enemy_pure_taken_add = "enemy_pure_taken_add",
+  /** 敌人真实脆弱 */
+  enemy_pure_fragile = "enemy_pure_fragile",
+  /** 真实伤害独立增幅 */
+  enemy_pure_damage_mul = "enemy_pure_damage_mul",
+  /** 敌人受到真实伤害放大 */
+  enemy_final_pure_damage_scale = "enemy_final_pure_damage_scale",
+  /// --------------敌方/受到元素伤害放大--------------
+  /** 敌人受到元素损伤独立增幅 */
+  enemy_ep_damage_mul = "enemy_ep_damage_mul",
+  /** 敌人受到元素伤害独立增幅 */
+  enemy_elment_damage_mul = "enemy_elment_damage_mul",
 }
 
 /** 由 `zone(...)` 定义、允许业务写入 item 的乘区 ID。 */
@@ -135,7 +169,22 @@ export type FormulaWritableZoneId =
   | FormulaZoneId.enemy_final_def_mul
   | FormulaZoneId.enemy_base_magic_resist
   | FormulaZoneId.enemy_direct_magic_resist_mul
-  | FormulaZoneId.enemy_final_magic_resist_mul;
+  | FormulaZoneId.enemy_final_magic_resist_mul
+  // 敌人受到物理伤害放大
+  | FormulaZoneId.enemy_phy_taken_add
+  | FormulaZoneId.enemy_phy_fragile
+  | FormulaZoneId.enemy_phy_damage_mul
+  // 敌人受到法术伤害放大
+  | FormulaZoneId.enemy_mag_taken_add
+  | FormulaZoneId.enemy_mag_fragile
+  | FormulaZoneId.enemy_mag_damage_mul
+  // 敌人受到真实伤害放大
+  | FormulaZoneId.enemy_pure_taken_add
+  | FormulaZoneId.enemy_pure_fragile
+  | FormulaZoneId.enemy_pure_damage_mul
+  // 敌人受到元素伤害放大
+  | FormulaZoneId.enemy_ep_damage_mul
+  | FormulaZoneId.enemy_elment_damage_mul;
 
 /** 由 `formula(...)` 定义、只负责派生计算的公式 ID。 */
 export type FormulaId =
@@ -145,13 +194,17 @@ export type FormulaId =
   | FormulaZoneId.char_out_atk
   | FormulaZoneId.char_in_atk
   | FormulaZoneId.char_final_atk
+  | FormulaZoneId.char_final_attack_speed
   | FormulaZoneId.char_out_def
   | FormulaZoneId.char_in_def
   | FormulaZoneId.char_final_def
   | FormulaZoneId.enemy_final_max_hp
   | FormulaZoneId.enemy_final_atk
   | FormulaZoneId.enemy_final_def
-  | FormulaZoneId.enemy_final_magic_resist;
+  | FormulaZoneId.enemy_final_magic_resist
+  | FormulaZoneId.enemy_final_phy_damage_scale
+  | FormulaZoneId.enemy_final_mag_damage_scale
+  | FormulaZoneId.enemy_final_pure_damage_scale;
 
 /**
  * 一次公式计算使用的完整公式书。
@@ -175,6 +228,7 @@ export class FormulaBook {
     // 攻击速度只区分基础值与直接加算，所有已确认藏品效果统一追加点数。
     const char_base_attack_speed = zone(FormulaZoneId.char_base_attack_speed, plus);
     const char_direct_attack_speed_add = zone(FormulaZoneId.char_direct_attack_speed_add, plus);
+    const char_final_attack_speed = formula(FormulaZoneId.char_final_attack_speed, plus(char_base_attack_speed, char_direct_attack_speed_add));
     // 我方防御力沿用攻击力的局外、局内与最终三阶段聚合语义。
     const char_base_def = zone(FormulaZoneId.char_base_def, plus);
     const char_out_def_add = zone(FormulaZoneId.char_out_def_add, plus);
@@ -220,6 +274,36 @@ export class FormulaBook {
       multiply(enemy_base_magic_resist, enemy_direct_magic_resist_mul, enemy_final_magic_resist_mul),
     );
 
+    const enemy_phy_taken_add = zone(FormulaZoneId.enemy_phy_taken_add, plus, item("基数", 1));
+    const enemy_phy_fragile = zone(FormulaZoneId.enemy_phy_fragile, max, item("基数", 1));
+    const enemy_phy_damage_mul = zone(FormulaZoneId.enemy_phy_damage_mul, multiply, item("基数", 1));
+    const enemy_final_phy_damage_scale = formula(
+      FormulaZoneId.enemy_final_phy_damage_scale,
+      multiply(enemy_phy_taken_add, enemy_phy_fragile, enemy_phy_damage_mul),
+    );
+
+    // 法术伤害放大与物理伤害放大保持相同的易伤、脆弱和独立增幅结构。
+    const enemy_mag_taken_add = zone(FormulaZoneId.enemy_mag_taken_add, plus, item("基数", 1));
+    const enemy_mag_fragile = zone(FormulaZoneId.enemy_mag_fragile, max, item("基数", 1));
+    const enemy_mag_damage_mul = zone(FormulaZoneId.enemy_mag_damage_mul, multiply, item("基数", 1));
+    const enemy_final_mag_damage_scale = formula(
+      FormulaZoneId.enemy_final_mag_damage_scale,
+      multiply(enemy_mag_taken_add, enemy_mag_fragile, enemy_mag_damage_mul),
+    );
+
+    // 真实伤害放大与物理伤害放大保持相同的易伤、脆弱和独立增幅结构。
+    const enemy_pure_taken_add = zone(FormulaZoneId.enemy_pure_taken_add, plus, item("基数", 1));
+    const enemy_pure_fragile = zone(FormulaZoneId.enemy_pure_fragile, max, item("基数", 1));
+    const enemy_pure_damage_mul = zone(FormulaZoneId.enemy_pure_damage_mul, multiply, item("基数", 1));
+    const enemy_final_pure_damage_scale = formula(
+      FormulaZoneId.enemy_final_pure_damage_scale,
+      multiply(enemy_pure_taken_add, enemy_pure_fragile, enemy_pure_damage_mul),
+    );
+
+    // 敌方元素损伤
+    const enemy_ep_damage_mul = zone(FormulaZoneId.enemy_ep_damage_mul, multiply, item("基数", 1));
+    const enemy_elment_damage_mul = zone(FormulaZoneId.enemy_elment_damage_mul, multiply, item("基数", 1));
+
     this.zones = {
       char_base_max_hp,
       char_out_max_hp_add,
@@ -243,6 +327,7 @@ export class FormulaBook {
       // 干员攻击速度
       char_base_attack_speed,
       char_direct_attack_speed_add,
+      char_final_attack_speed,
       // 干员防御力
       char_base_def,
       char_out_def_add,
@@ -273,6 +358,24 @@ export class FormulaBook {
       enemy_direct_magic_resist_mul,
       enemy_final_magic_resist_mul,
       enemy_final_magic_resist,
+      // 敌人受到物理伤害放大
+      enemy_phy_taken_add,
+      enemy_phy_fragile,
+      enemy_phy_damage_mul,
+      enemy_final_phy_damage_scale,
+      // 敌人受到法术伤害放大
+      enemy_mag_taken_add,
+      enemy_mag_fragile,
+      enemy_mag_damage_mul,
+      enemy_final_mag_damage_scale,
+      // 敌人受到真实伤害放大
+      enemy_pure_taken_add,
+      enemy_pure_fragile,
+      enemy_pure_damage_mul,
+      enemy_final_pure_damage_scale,
+      // 敌人受到元素伤害放大
+      enemy_ep_damage_mul,
+      enemy_elment_damage_mul,
     };
   }
 

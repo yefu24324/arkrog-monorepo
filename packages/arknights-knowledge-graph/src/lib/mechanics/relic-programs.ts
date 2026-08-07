@@ -2,7 +2,7 @@
  * 攻击力、攻击速度、防御力与最大生命藏品运行时链：原始 buff 路由、激活判定、FormulaItemExpression 构造和 FormulaBook 写入。
  */
 
-import type { WrappedRelicItem } from "@arkrog/arknights-schema/game-data";
+import type { WrappedRelicItem } from "@arkrog/arknights-gamedata-report";
 
 import type { MechanicIndex } from "../classify/mechanic-index.js";
 import { resolveMechanicName } from "../classify/mechanic-index.js";

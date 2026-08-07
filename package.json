@@ -13,7 +13,7 @@
     "graph:test": "pnpm --filter @arkrog/arknights-knowledge-graph test",
     "graph:trace": "pnpm --filter @arkrog/arknights-knowledge-graph graph:trace",
     "graph:typecheck": "pnpm --filter @arkrog/arknights-knowledge-graph typecheck",
-    "relics:export": "pnpm --filter @arkrog/arknights-schema relics:export",
+    "report:gamedata-report": "pnpm --filter @arkrog/arknights-gamedata-report report:gamedata-report",
     "schema:bootstrap": "pnpm --filter @arkrog/arknights-schema data:bootstrap",
     "schema:generate": "pnpm schema:bootstrap",
     "schema:analyze": "pnpm --filter @arkrog/arknights-schema data:analyze",
