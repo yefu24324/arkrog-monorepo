@@ -8,8 +8,26 @@ export interface RepositoryPaths {
   gameData: string;
   /** schema 包源码目录。 */
   schemaSource: string;
+  /** gamedata-report 公开源码目录，用于发现可建图对象类型。 */
+  gameDataReportSource: string;
   /** 默认 Kuzu 数据库目录。 */
   database: string;
+  /** 图谱本地工作区；规则、候选库和清单都不提交 Git。 */
+  graphWorkspace: string;
+  /** AI 生成并由确定性程序验证的本地声明式规则。 */
+  graphRules: string;
+  /** AI 生成并由确定性程序验证的主题特殊系统解释。 */
+  graphTopicSystems: string;
+  /** 当前正式图谱的构建清单。 */
+  graphManifest: string;
+  /** 有冲突时仅供诊断的候选图谱清单。 */
+  graphCandidateManifest: string;
+  /** 构建技能读取的输入准备报告。 */
+  graphPreparation: string;
+  /** 校验或构建冲突报告。 */
+  graphConflicts: string;
+  /** 人类对语义变化的本地发布审批。 */
+  graphApproval: string;
 }
 
 /** 一条可展示的乘区追踪结果。 */

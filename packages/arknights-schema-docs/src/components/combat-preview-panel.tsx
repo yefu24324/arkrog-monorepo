@@ -19,11 +19,14 @@ import {
   type FormulaExpression,
 } from '@arkrog/arknights-knowledge-graph/formula';
 import {
-  applyRelicItemsToFormulaBook,
+  applyRelics,
   type FormulaActivationContext,
 } from '@arkrog/arknights-knowledge-graph/mechanics';
+import { RoguelikeStageSelector } from './roguelike-stage-selector';
 import { FormulaResultPopover } from './formula-expr-popover';
 import { cn } from '../lib/cn';
+import { useRoguelikeStageOptions } from '../hooks/use-roguelike-stage-options';
+import type { RoguelikeStageOption } from '../lib/roguelike-stage-options';
 
 /** 干员目录直接使用 GameData 报告的轻量条目。 */
 type OperatorIndexEntry = ExportedOperatorIndexItem;
@@ -101,6 +104,7 @@ function recordStringArray(record: Record<string, unknown>, key: string): string
 function buildActivationContext(
   operator: OperatorDetail | null,
   enemy: EnemyDetail | null,
+  stage: RoguelikeStageOption | null,
 ): Omit<FormulaActivationContext, 'selectedRelicIds'> {
   return {
     character: operator
@@ -116,6 +120,14 @@ function buildActivationContext(
           id: enemy.id,
           levelType: recordString(enemy.enemyData, 'levelType'),
           tags: recordStringArray(enemy.enemyData, 'enemyTags'),
+        }
+      : undefined,
+    stage: stage
+      ? {
+          id: stage.id,
+          isBoss: stage.isBoss,
+          isEmergency: stage.isElite || stage.difficulty === 'FOUR_STAR',
+          isDanger: stage.code === 'ISW-DF',
         }
       : undefined,
   };
@@ -281,6 +293,7 @@ export function CombatPreviewPanel({
   const [enemy, setEnemy] = useState<EnemyDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const stageOptions = useRoguelikeStageOptions(topicId);
 
   useEffect(() => {
     let cancelled = false;
@@ -428,9 +441,9 @@ export function CombatPreviewPanel({
         item('敌人基础法抗', enemyBaseMagicResistance),
       );
     }
-    applyRelicItemsToFormulaBook(book, selectedRelics, {
+    applyRelics(selectedRelics, book, {
       topicId,
-      activation: buildActivationContext(operator, enemy),
+      activation: buildActivationContext(operator, enemy, stageOptions.selectedStage),
     });
     // FormulaBook 只定义基础攻速与直接加成两个真实 zone，预览现场组合二者。
     const operatorAttackSpeedFormula = plus(
@@ -487,7 +500,7 @@ export function CombatPreviewPanel({
         ? undefined
         : book.get_zone(FormulaZoneId.enemy_final_magic_resist),
     };
-  }, [enemy, operator, selectedRelics, topicId]);
+  }, [enemy, operator, selectedRelics, stageOptions.selectedStage, topicId]);
 
   /** 干员攻击力、生命、攻速和防御力使用 FormulaBook，法抗仍读取原始属性帧。 */
   const operatorAttributes: PreviewAttribute[] = [
@@ -560,10 +573,21 @@ export function CombatPreviewPanel({
       <div className="mb-4">
         <h2 className="text-base font-semibold">属性预览</h2>
         <p className="mt-1 text-xs text-fd-muted-foreground">
-          选择干员和敌人后，根据当前启用的藏品计算战斗属性。
+          选择区域、关卡、干员和敌人后，根据当前启用的藏品计算战斗属性。
         </p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <RoguelikeStageSelector
+        data={stageOptions.data}
+        loading={stageOptions.loading}
+        selectedRegionId={stageOptions.selectedRegionId}
+        selectedStageId={stageOptions.selectedStageId}
+        onRegionChange={stageOptions.selectRegion}
+        onStageChange={stageOptions.selectStage}
+      />
+      {stageOptions.error ? (
+        <p className="mt-3 text-xs text-red-500">加载关卡选项失败：{stageOptions.error}</p>
+      ) : null}
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <EntitySelect
           label="干员"
           items={operatorIndex}

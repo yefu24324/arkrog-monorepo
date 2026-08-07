@@ -7,13 +7,19 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
-import type { ExportedOperatorIndex } from "@arkrog/arknights-gamedata-report";
+import type {
+  ExportedOperatorIndex,
+  ExportedRogueStageReport,
+  ExportedAnyRoguelikeTopicExtReport,
+} from "@arkrog/arknights-gamedata-report";
 
 import type { FormulaExpression } from "../../arknights-knowledge-graph/src/lib/formula/ast.js";
 import {
   FormulaBook,
   FormulaZoneId,
 } from "../../arknights-knowledge-graph/src/lib/formula/formula-book.js";
+import { buildRoguelikeStageOptions } from "../src/lib/roguelike-stage-options.js";
+import { parseHumanZoneValidation } from "../src/lib/zone-validation.js";
 
 /** 本脚本、源码包与生成目录的稳定路径。 */
 const CURRENT_FILE = fileURLToPath(import.meta.url);
@@ -22,24 +28,24 @@ const REPO_ROOT = path.resolve(PACKAGE_ROOT, "..", "..");
 const SCHEMA_PACKAGE_ROOT = path.resolve(PACKAGE_ROOT, "..", "arknights-schema");
 const TYPES_ROOT = path.resolve(SCHEMA_PACKAGE_ROOT, "src", "types");
 const SCHEMAS_ROOT = path.resolve(SCHEMA_PACKAGE_ROOT, "src", "schemas");
-const RELIC_VALIDATION_SOURCE_ROOT = path.resolve(
-  REPO_ROOT,
-  "docs",
-  "game",
-  "relic-zone-validation",
-);
 const CONTENT_ROOT = path.resolve(PACKAGE_ROOT, "content", "docs");
 const TYPES_CONTENT_ROOT = path.resolve(CONTENT_ROOT, "types");
 const RELIC_ZONES_CONTENT_ROOT = path.resolve(CONTENT_ROOT, "relic-zones");
 const RELIC_ZONES_DATA_ROOT = path.resolve(PACKAGE_ROOT, "public", "data", "relic-zones");
-const RELIC_VALIDATION_CONTENT_ROOT = path.resolve(CONTENT_ROOT, "relic-zone-validation");
-const RELIC_VALIDATION_DATA_ROOT = path.resolve(
+const ZONE_VALIDATION_CONTENT_ROOT = path.resolve(CONTENT_ROOT, "zone-validation");
+/** 迁移后只用于删除旧生成路由与旧复制产物，不再写入。 */
+const LEGACY_RELIC_VALIDATION_CONTENT_ROOT = path.resolve(CONTENT_ROOT, "relic-zone-validation");
+const ZONE_VALIDATION_DATA_ROOT = path.resolve(
   PACKAGE_ROOT,
   "public",
   "data",
-  "relic-zone-validation",
+  "zone-validation",
 );
+const HUMAN_ZONE_VALIDATION_ROOT = path.resolve(PACKAGE_ROOT, "public", "human-zone-validation");
+/** 旧 Graph 复制目录不再是输入，生成时清除以免留下废弃发布路径。 */
+const LEGACY_RELIC_VALIDATION_DATA_ROOT = path.resolve(PACKAGE_ROOT, "public", "data", "relic-zone-validation");
 const ENEMIES_DATA_ROOT = path.resolve(PACKAGE_ROOT, "public", "data", "enemies");
+const STAGE_OPTIONS_DATA_ROOT = path.resolve(PACKAGE_ROOT, "public", "data", "roguelike-stages");
 const FORMULA_BOOK_CONTENT_PATH = path.resolve(CONTENT_ROOT, "formula-book.mdx");
 const FORMULA_BOOK_DATA_PATH = path.resolve(PACKAGE_ROOT, "public", "data", "formula-book.json");
 const FORMULA_BOOK_SOURCE_PATH = path.resolve(
@@ -157,27 +163,19 @@ interface TypeTableField {
 /** graph:export 主题摘要。 */
 interface RelicZoneTopicSummary {
   effectCount: number;
-  formulaSourcePath: string;
   graphSourcePath: string;
-  humanSourcePath?: string;
   id: string;
   itemCount: number;
   name: string;
 }
 
-/** human/rogue_N.json 的稀疏人工覆盖结构。 */
-interface HumanRelicZoneArtifact {
-  description?: string;
-  items: Array<{
-    effects?: Array<{ effectId: string; note?: string; zones: string[] }>;
-    id: string;
-    note?: string;
-    reviewedAt?: string;
-    reviewer: string;
-    zones?: string[];
-  }>;
-  schemaVersion: 1;
-  topic: { id: string; name?: string };
+/** 文档组装阶段读取的 Graph 产物身份。 */
+interface RelicZoneArtifactHeader {
+  producer?: {
+    kind?: "graph";
+  };
+  scope?: { effectCount?: number; itemCount?: number };
+  topic?: { id?: string; name?: string };
 }
 
 /** 已知数据表的中文侧栏标题。 */
@@ -629,79 +627,30 @@ function writeTypeSources(entries: TypeDocEntry[]): void {
   );
 }
 
-/** 读取并校验可选的稀疏 human 人工覆盖文件。 */
-function readHumanRelicZoneArtifact(
-  topicId: string,
-  sourcePath: string | undefined,
-): HumanRelicZoneArtifact {
-  if (!sourcePath) {
-    return {
-      schemaVersion: 1,
-      topic: { id: topicId },
-      description: "该主题暂无人工记录，全部藏品回退到 formula 结果。",
-      items: [],
-    };
-  }
-  const raw = JSON.parse(fs.readFileSync(sourcePath, "utf8")) as HumanRelicZoneArtifact;
-  if (raw.schemaVersion !== 1 || raw.topic?.id !== topicId || !Array.isArray(raw.items)) {
-    throw new Error(`${sourcePath} 不是有效的 human 藏品乘区文件。`);
-  }
-  // human 只能引用 FormulaBook 中由 zone(...) 定义的真实可写乘区，派生公式 ID 不可写入。
-  const knownZones = new Set<string>(
-    Object.values(new FormulaBook().zones)
-      .filter((node) => node.kind === "zone")
-      .map((node) => node.zoneId),
-  );
-  const itemIds = new Set<string>();
-  for (const item of raw.items) {
-    if (!item.id || !item.reviewer || itemIds.has(item.id)) {
-      throw new Error(`${sourcePath} 存在空 ID、空 reviewer 或重复藏品：${item.id}`);
-    }
-    itemIds.add(item.id);
-    const effectIds = new Set<string>();
-    for (const effect of item.effects ?? []) {
-      if (!effect.effectId || effectIds.has(effect.effectId)) {
-        throw new Error(`${sourcePath} 的 ${item.id} 存在空或重复 effectId。`);
-      }
-      effectIds.add(effect.effectId);
-    }
-    // 人工输入只允许公式簿已定义的稳定乘区 ID，避免拼写错误静默进入页面。
-    const zones = [
-      ...(item.zones ?? []),
-      ...(item.effects ?? []).flatMap((effect) => effect.zones),
-    ];
-    const unknownZone = zones.find((zoneId) => !knownZones.has(zoneId));
-    if (unknownZone) throw new Error(`${sourcePath} 使用了未知乘区：${unknownZone}`);
-  }
-  return raw;
-}
-
-/** 扫描 graph:export 同时产出的 graph/formula 主题 JSON。 */
+/** 按当前 GameData report 主题扫描直接发布的 Graph 产物。 */
 function collectRelicZoneTopics(): RelicZoneTopicSummary[] {
-  const graphRoot = path.resolve(RELIC_VALIDATION_SOURCE_ROOT, "graph");
-  const formulaRoot = path.resolve(RELIC_VALIDATION_SOURCE_ROOT, "formula");
-  const humanRoot = path.resolve(RELIC_VALIDATION_SOURCE_ROOT, "human");
-  if (!fs.existsSync(graphRoot) || !fs.existsSync(formulaRoot)) return [];
+  const graphRoot = path.resolve(ZONE_VALIDATION_DATA_ROOT, "graph");
+  const reportRoot = path.resolve(PACKAGE_ROOT, "public", "gamedata-report", "roguelike");
+  if (!fs.existsSync(reportRoot)) throw new Error(`未找到当前 GameData 主题报告：${reportRoot}`);
   const topics: RelicZoneTopicSummary[] = [];
-  for (const fileName of fs.readdirSync(graphRoot)) {
-    if (!/^rogue_\d+\.json$/.test(fileName)) continue;
+  const currentTopicIds = fs.readdirSync(reportRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && /^rogue_\d+$/.test(entry.name))
+    .map((entry) => entry.name);
+  for (const topicId of currentTopicIds) {
+    const fileName = `${topicId}.json`;
     const graphSourcePath = path.resolve(graphRoot, fileName);
-    const raw = JSON.parse(fs.readFileSync(graphSourcePath, "utf8")) as {
-      scope?: { effectCount?: number; itemCount?: number };
-      topic?: { id?: string; name?: string };
-    };
-    const id = raw.topic?.id;
-    if (!id || !/^rogue_\d+$/.test(id)) continue;
-    const formulaSourcePath = path.resolve(formulaRoot, `${id}.json`);
-    if (!fs.existsSync(formulaSourcePath)) {
-      throw new Error(`主题 ${id} 缺少 formula 对照文件：${formulaSourcePath}`);
+    if (!fs.existsSync(graphSourcePath)) {
+      throw new Error(`当前 GameData 主题 ${topicId} 缺少 Graph 乘区校验产物：${graphSourcePath}`);
     }
-    const humanCandidate = path.resolve(humanRoot, `${id}.json`);
+    const raw = JSON.parse(fs.readFileSync(graphSourcePath, "utf8")) as RelicZoneArtifactHeader;
+    const id = raw.topic?.id;
+    if (id !== topicId) throw new Error(`${graphSourcePath} 的主题 ID 与文件名不一致。`);
+    if (raw.producer?.kind !== "graph") {
+      throw new Error(`${graphSourcePath} 不是从图谱导出的 graph 产物。`);
+    }
     topics.push({
       effectCount: raw.scope?.effectCount ?? 0,
-      formulaSourcePath,
       graphSourcePath,
-      humanSourcePath: fs.existsSync(humanCandidate) ? humanCandidate : undefined,
       id,
       itemCount: raw.scope?.itemCount ?? 0,
       name: raw.topic?.name ?? id,
@@ -747,8 +696,8 @@ ${cards}
   <Card title="藏品乘区" href="/docs/relic-zones">
     按主题浏览藏品原文、加成乘区，并展开查看 buffs 原数据
   </Card>
-  <Card title="藏品乘区人工校验" href="/docs/relic-zone-validation">
-    对照 Kuzu 图谱、公式贡献函数与稀疏 human 人工修正
+  <Card title="乘区校验" href="/docs/zone-validation">
+    对照图谱、程序与人工维护的历史版本
   </Card>
   <Card title="公式簿" href="/docs/formula-book">
     干员与敌人最终属性公式
@@ -761,7 +710,7 @@ ${cards}
     `${JSON.stringify(
       {
         title: "文档",
-        pages: ["index", "formula-book", "types", "relic-zones", "relic-zone-validation"],
+        pages: ["index", "formula-book", "types", "relic-zones", "zone-validation"],
       },
       null,
       2,
@@ -955,82 +904,51 @@ description: ${JSON.stringify(`${topic.name}难度选择、藏品乘区与生效
   return topics.length;
 }
 
-/** 同步 graph/formula/human 三层 JSON，并生成新的人工确认校验页面。 */
-function writeRelicZoneValidationPages(topics: RelicZoneTopicSummary[]): number {
-  fs.mkdirSync(RELIC_VALIDATION_DATA_ROOT, { recursive: true });
-  fs.mkdirSync(RELIC_VALIDATION_CONTENT_ROOT, { recursive: true });
-  for (const layer of ["graph", "formula", "human"]) {
-    fs.mkdirSync(path.resolve(RELIC_VALIDATION_DATA_ROOT, layer), { recursive: true });
-  }
-
+/** 校验人工历史文件，并生成通用乘区校验页面。 */
+function writeZoneValidationPages(topics: RelicZoneTopicSummary[]): number {
+  fs.mkdirSync(ZONE_VALIDATION_CONTENT_ROOT, { recursive: true });
+  fs.mkdirSync(HUMAN_ZONE_VALIDATION_ROOT, { recursive: true });
+  const writableZoneIds = new Set(
+    Object.values(new FormulaBook().zones)
+      .filter((expression) => expression.kind === "zone")
+      .map((expression) => expression.zoneId),
+  );
   for (const topic of topics) {
-    fs.copyFileSync(
-      topic.graphSourcePath,
-      path.resolve(RELIC_VALIDATION_DATA_ROOT, "graph", `${topic.id}.json`),
-    );
-    fs.copyFileSync(
-      topic.formulaSourcePath,
-      path.resolve(RELIC_VALIDATION_DATA_ROOT, "formula", `${topic.id}.json`),
-    );
-    const human = readHumanRelicZoneArtifact(topic.id, topic.humanSourcePath);
-    const formula = JSON.parse(fs.readFileSync(topic.formulaSourcePath, "utf8")) as {
-      items?: Array<{ effects?: Array<{ effectId?: string }>; id?: string }>;
-    };
-    const formulaItems = new Map((formula.items ?? []).map((item) => [item.id, item]));
-    for (const humanItem of human.items) {
-      const formulaItem = formulaItems.get(humanItem.id);
-      if (!formulaItem) {
-        throw new Error(`${topic.humanSourcePath} 引用了 formula 中不存在的藏品：${humanItem.id}`);
-      }
-      const effectIds = new Set((formulaItem.effects ?? []).map((effect) => effect.effectId));
-      const unknownEffect = (humanItem.effects ?? []).find(
-        (effect) => !effectIds.has(effect.effectId),
-      );
-      if (unknownEffect) {
-        throw new Error(
-          `${topic.humanSourcePath} 的 ${humanItem.id} 引用了不存在的 effect：${unknownEffect.effectId}`,
-        );
-      }
-    }
-    fs.writeFileSync(
-      path.resolve(RELIC_VALIDATION_DATA_ROOT, "human", `${topic.id}.json`),
-      `${JSON.stringify(human, null, 2)}\n`,
-      "utf8",
-    );
+    const historyPath = path.resolve(HUMAN_ZONE_VALIDATION_ROOT, `${topic.id}.json`);
+    if (!fs.existsSync(historyPath)) continue;
+    parseHumanZoneValidation(JSON.parse(fs.readFileSync(historyPath, "utf8")), writableZoneIds);
   }
 
   const cards = topics
     .map(
-      (topic) => `  <Card title=${JSON.stringify(topic.name)} href="/docs/relic-zone-validation/${topic.id}">
+      (topic) => `  <Card title=${JSON.stringify(topic.name)} href="/docs/zone-validation/${topic.id}">
     ${topic.itemCount} 件藏品 · ${topic.effectCount} 条 buff
   </Card>`,
     )
     .join("\n");
   fs.writeFileSync(
-    path.resolve(RELIC_VALIDATION_CONTENT_ROOT, "index.mdx"),
+    path.resolve(ZONE_VALIDATION_CONTENT_ROOT, "index.mdx"),
     `---
-title: 藏品乘区人工校验
-description: 对照 Kuzu 图谱预测、公式贡献函数结果与稀疏人工修正
+title: 乘区校验
+description: 对照图谱结果、程序结果与人工维护的历史版本
 ---
 
-本目录用于人工确认乘区。formula 结果默认所有 buff 生效，只检查乘区写入，不计算公式数值；human 只记录已经复核或需要纠正的少量藏品，未记录项自动回退到 formula。
-
-数据优先级：\`human > formula\`；graph 单独保留用于对照，不读取 human 作为生产证据。
+本目录用于对照 Graph、Mechanics 与人工维护的历史版本。Graph 读取 Kuzu 图谱直接发布的独立产物；Mechanics 由页面调用当前程序即时分析；历史版本保存在 \`public/human-zone-validation\`，由人工复制或下载后维护。本次只展示藏品，后续可扩展主题难度与特殊系统。
 
 <Cards>
-${cards || '  <Card title="暂无数据">请先运行 graph:export:all</Card>'}
+${cards || '  <Card title="暂无数据">请先显式准备 Graph 导出数据</Card>'}
 </Cards>
 `,
     "utf8",
   );
   fs.writeFileSync(
-    path.resolve(RELIC_VALIDATION_CONTENT_ROOT, "meta.json"),
+    path.resolve(ZONE_VALIDATION_CONTENT_ROOT, "meta.json"),
     `${JSON.stringify(
       {
         defaultOpen: true,
         pages: ["index", ...topics.map((topic) => topic.id)],
         pagesIndex: "index",
-        title: "藏品乘区人工校验",
+        title: "乘区校验",
       },
       null,
       2,
@@ -1039,13 +957,13 @@ ${cards || '  <Card title="暂无数据">请先运行 graph:export:all</Card>'}
   );
   for (const topic of topics) {
     fs.writeFileSync(
-      path.resolve(RELIC_VALIDATION_CONTENT_ROOT, `${topic.id}.mdx`),
+      path.resolve(ZONE_VALIDATION_CONTENT_ROOT, `${topic.id}.mdx`),
       `---
-title: ${JSON.stringify(`${topic.name} · 人工校验`)}
-description: ${JSON.stringify(`对照 ${topic.name} 的 graph、formula 与 human 藏品乘区`)}
+title: ${JSON.stringify(`${topic.name} · 乘区校验`)}
+description: ${JSON.stringify(`对照 ${topic.name} 的图谱、程序与历史藏品乘区`)}
 ---
 
-<RelicZoneValidationExplorer topicId="${topic.id}" />
+<ZoneValidationExplorer topicId="${topic.id}" />
 `,
       "utf8",
     );
@@ -1159,6 +1077,33 @@ function writeEnemyCatalog(): number {
   return index.length;
 }
 
+/** 从已生成报告写出浏览器级联选择使用的轻量区域、关卡索引。 */
+function writeRoguelikeStageOptions(topics: readonly RelicZoneTopicSummary[]): number {
+  const reportRoot = path.resolve(PACKAGE_ROOT, "public", "gamedata-report", "roguelike");
+  fs.mkdirSync(STAGE_OPTIONS_DATA_ROOT, { recursive: true });
+  for (const topic of topics) {
+    const topicRoot = path.resolve(reportRoot, topic.id);
+    const stagePath = path.resolve(topicRoot, "stage.json");
+    const topicExtPath = path.resolve(topicRoot, "topic_ext.json");
+    if (!fs.existsSync(stagePath) || !fs.existsSync(topicExtPath)) {
+      throw new Error(`主题 ${topic.id} 缺少 stage.json 或 topic_ext.json。`);
+    }
+    const stages = JSON.parse(
+      fs.readFileSync(stagePath, "utf8"),
+    ) as ExportedRogueStageReport;
+    const topicExt = JSON.parse(
+      fs.readFileSync(topicExtPath, "utf8"),
+    ) as ExportedAnyRoguelikeTopicExtReport;
+    const payload = buildRoguelikeStageOptions(topic.id, stages, topicExt);
+    fs.writeFileSync(
+      path.resolve(STAGE_OPTIONS_DATA_ROOT, `${topic.id}.json`),
+      `${JSON.stringify(payload, null, 2)}\n`,
+      "utf8",
+    );
+  }
+  return topics.length;
+}
+
 /** 清理本脚本负责的全部可再生成输出。 */
 function resetGeneratedContent(): void {
   fs.mkdirSync(CONTENT_ROOT, { recursive: true });
@@ -1166,9 +1111,11 @@ function resetGeneratedContent(): void {
     TYPES_CONTENT_ROOT,
     RELIC_ZONES_CONTENT_ROOT,
     RELIC_ZONES_DATA_ROOT,
-    RELIC_VALIDATION_CONTENT_ROOT,
-    RELIC_VALIDATION_DATA_ROOT,
+    ZONE_VALIDATION_CONTENT_ROOT,
+    LEGACY_RELIC_VALIDATION_CONTENT_ROOT,
+    LEGACY_RELIC_VALIDATION_DATA_ROOT,
     ENEMIES_DATA_ROOT,
+    STAGE_OPTIONS_DATA_ROOT,
     FORMULA_BOOK_CONTENT_PATH,
     FORMULA_BOOK_DATA_PATH,
     GENERATED_ROOT,
@@ -1196,16 +1143,17 @@ function main(): void {
   const typePages = writeDirectoryTree(buildDirectoryTree(entries), typeHrefByName);
   const relicTopics = collectRelicZoneTopics();
   const relicPages = writeRelicZonePages(relicTopics);
-  const validationPages = writeRelicZoneValidationPages(relicTopics);
+  const validationPages = writeZoneValidationPages(relicTopics);
   const formulaPages = writeFormulaBookPage();
   const operatorCount = countExportedOperators();
   const enemyCount = writeEnemyCatalog();
+  const stageTopicCount = writeRoguelikeStageOptions(relicTopics);
   const definitionCount = entries.reduce(
     (total, entry) => total + entry.definitions.length,
     0,
   );
   console.log(
-    `文档组装完成：${typePages} 个类型模块页面，覆盖 ${definitionCount} 个定义；战斗公式 ${formulaPages} 条；藏品乘区 ${relicPages} 个主题；人工校验 ${validationPages} 个主题；干员 ${operatorCount}、敌人 ${enemyCount}。`,
+    `文档组装完成：${typePages} 个类型模块页面，覆盖 ${definitionCount} 个定义；战斗公式 ${formulaPages} 条；藏品乘区 ${relicPages} 个主题；乘区校验 ${validationPages} 个主题；关卡选项 ${stageTopicCount} 个主题；干员 ${operatorCount}、敌人 ${enemyCount}。`,
   );
 }
 

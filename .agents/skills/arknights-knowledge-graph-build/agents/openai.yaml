@@ -1,0 +1,4 @@
+interface:
+  display_name: "arknights-knowledge-graph-build"
+  short_description: "解释人类机制知识并校验冲突后原子重建本地关系知识图谱"
+  default_prompt: "使用 $arknights-knowledge-graph-build 根据最新人类知识、FormulaBook 与 GameData 重建本地知识图谱。"

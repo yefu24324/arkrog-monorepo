@@ -40,18 +40,18 @@ export async function exportRoguelikeReports(
   await writeJson(path.join(outputRoot, "roguelike.json"), buildRoguelikeIndex(table, topicIds));
   for (const topicId of topicIds) {
     const topicDirectory = path.join(outputRoot, "roguelike", topicId);
+    // topic_ext 的 rogue_6 专用结构复用 stage report，确保完整 Level 只读取一次。
+    const stageReport = await buildStagesReport(gameDataRoot, topicId, table.details[topicId]!);
     await Promise.all([
       writeJson(path.join(topicDirectory, "topic.json"), buildTopicReport(table, topicId)),
       writeJson(
         path.join(topicDirectory, "relics.json"),
         buildRelicsReport(table.details[topicId]!),
       ),
-      buildStagesReport(gameDataRoot, topicId, table.details[topicId]!).then((report) =>
-        writeJson(path.join(topicDirectory, "stage.json"), report),
-      ),
+      writeJson(path.join(topicDirectory, "stage.json"), stageReport),
       writeJson(
         path.join(topicDirectory, "topic_ext.json"),
-        buildTopicExtReport(table, topicId),
+        buildTopicExtReport(table, topicId, stageReport),
       ),
     ]);
   }

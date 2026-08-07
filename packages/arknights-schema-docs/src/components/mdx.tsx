@@ -3,7 +3,7 @@ import type { MDXComponents } from 'mdx/types';
 import { CnTypeTable } from '@/components/cn-type-table';
 import { FormulaBookExplorer } from '@/components/formula-book-explorer';
 import { RelicZoneExplorer } from '@/components/relic-zone-explorer';
-import { RelicZoneValidationExplorer } from '@/components/relic-zone-validation-explorer';
+import { ZoneValidationExplorer } from '@/components/zone-validation-explorer';
 import { TypeSource } from '@/components/type-source';
 
 /** 合并 Fumadocs 默认组件与文档站自定义组件。 */
@@ -13,7 +13,7 @@ export function getMDXComponents(components?: MDXComponents) {
     CnTypeTable,
     FormulaBookExplorer,
     RelicZoneExplorer,
-    RelicZoneValidationExplorer,
+    ZoneValidationExplorer,
     TypeSource,
     ...components,
   } satisfies MDXComponents;

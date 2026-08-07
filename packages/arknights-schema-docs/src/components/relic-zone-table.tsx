@@ -11,8 +11,8 @@ import type {
 } from '@arkrog/arknights-gamedata-report';
 import type { FormulaWritableZoneId } from '@arkrog/arknights-knowledge-graph/formula';
 import {
-  routeRelicBuffToZones,
-  type RelicBuffZoneRoute,
+  analyzeRelic,
+  type MechanicsAnalysis,
 } from '@arkrog/arknights-knowledge-graph/mechanics';
 import { CombatPreviewPanel } from './combat-preview-panel';
 import { cn } from '../lib/cn';
@@ -26,9 +26,14 @@ const ZONE_FILTER_NONE = '__none__';
 
 /** 单条原始 buff 的当前属性路由结果。 */
 interface RoutedRelicEffect {
-  buffIndex: number;
-  route: RelicBuffZoneRoute;
-  source: string;
+  /** 同一 effectId 可能产生多个 FormulaBook 贡献。 */
+  analyses: MechanicsAnalysis[];
+  /** 用于展示的外层 buff key。 */
+  key: string;
+  /** 原始黑板摘要。 */
+  blackboard: WrappedRelicItem['relic']['buffs'][number]['blackboard'];
+  /** 静态效果 ID。 */
+  effectId: string;
 }
 
 /** 一件包装藏品及其现场路由得到的属性分析。 */
@@ -53,47 +58,46 @@ interface TopicLoadState {
 
 /** 对一件包装藏品的直接 buff 和 charBuffData 现场执行属性路由。 */
 function routeWrappedRelic(item: WrappedRelicItem, topicId: string): RoutedRelicItem {
+  const analyses = analyzeRelic(item, { topicId });
+  const analysesByEffect = new Map<string, MechanicsAnalysis[]>();
+  for (const analysis of analyses) {
+    analysesByEffect.set(analysis.effectId, [
+      ...(analysesByEffect.get(analysis.effectId) ?? []),
+      analysis,
+    ]);
+  }
   const effects: RoutedRelicEffect[] = [];
   item.relic.buffs.forEach((buff, buffIndex) => {
+    const effectId = `effect:${topicId}:${item.id}:${buffIndex}`;
     effects.push({
-      source: 'relics',
-      buffIndex,
-      route: routeRelicBuffToZones({
-        effectId: `effect:${topicId}:${item.id}:${buffIndex}`,
-        source: 'relics',
-        buffIndex,
-        key: buff.key,
-        blackboard: buff.blackboard,
-        jsonPath: `$.details.${topicId}.relics[${JSON.stringify(item.id)}].buffs[${buffIndex}]`,
-      }),
+      effectId,
+      key: buff.key,
+      blackboard: buff.blackboard,
+      analyses: analysesByEffect.get(effectId) ?? [],
     });
   });
   for (const characterBuff of item.charBuffs) {
     (characterBuff.buffs ?? []).forEach((buff, buffIndex) => {
+      const effectId = `effect:${topicId}:charBuffData:${characterBuff.id}:${buffIndex}`;
       effects.push({
-        source: `charBuffData:${characterBuff.id}`,
-        buffIndex,
-        route: routeRelicBuffToZones({
-          effectId: `effect:${topicId}:charBuffData:${characterBuff.id}:${buffIndex}`,
-          source: `charBuffData:${characterBuff.id}`,
-          buffIndex,
-          key: buff.key,
-          blackboard: buff.blackboard,
-          jsonPath: `$.details.${topicId}.charBuffData[${JSON.stringify(characterBuff.id)}].buffs[${buffIndex}]`,
-        }),
+        effectId,
+        key: buff.key,
+        blackboard: buff.blackboard,
+        analyses: analysesByEffect.get(effectId) ?? [],
       });
     });
   }
   return {
     item,
     effects,
-    zones: [...new Set(effects.flatMap((effect) => effect.route.zoneIds))],
+    zones: [...new Set(analyses.flatMap((analysis) =>
+      analysis.status === 'supported' ? [analysis.zoneId] : []))],
   };
 }
 
 /** 将黑板压缩为便于浏览和搜索的文本。 */
 function summarizeBlackboard(effect: RoutedRelicEffect): string {
-  return effect.route.effect.blackboard
+  return effect.blackboard
     .map((entry) => `${entry.key}=${entry.valueStr ?? entry.value}`)
     .join(', ');
 }
@@ -107,7 +111,7 @@ function matchesSearch(entry: RoutedRelicItem, query: string): boolean {
     entry.item.relic.usage,
     ...entry.zones,
     ...entry.effects.flatMap((effect) => [
-      effect.route.effect.key,
+      effect.key,
       summarizeBlackboard(effect),
     ]),
   ].join(' ').toLowerCase();
@@ -154,9 +158,9 @@ function ZoneBadges({
 }
 
 /** 分类状态中文标签。 */
-function classificationLabel(route: RelicBuffZoneRoute): string {
-  if (route.classification === 'predicted') return '已路由';
-  if (route.classification === 'unknown') return '未知';
+function classificationLabel(analyses: readonly MechanicsAnalysis[]): string {
+  if (analyses.some((entry) => entry.status === 'supported')) return '已支持';
+  if (analyses.some((entry) => entry.status === 'unknown')) return '未知';
   return '不适用';
 }
 
@@ -174,34 +178,36 @@ function EffectDetails({
   return (
     <div className="space-y-3">
       {effects.map((effect) => {
-        const prediction = effect.route.predictions[0];
+        const supported = effect.analyses.filter(
+          (analysis): analysis is Extract<MechanicsAnalysis, { status: 'supported' }> =>
+            analysis.status === 'supported',
+        );
         return (
           <article
-            key={effect.route.effect.effectId}
+            key={effect.effectId}
             className="rounded-xl border bg-fd-background p-3"
           >
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <p className="font-mono text-xs font-semibold">{effect.route.effect.key}</p>
+                <p className="font-mono text-xs font-semibold">{effect.key}</p>
                 <p className="mt-1 text-[0.65rem] text-fd-muted-foreground">
-                  {effect.source} · buffs[{effect.buffIndex}]
+                  {effect.effectId}
                 </p>
               </div>
               <span className="rounded-full border px-2 py-0.5 text-[0.65rem] text-fd-muted-foreground">
-                {classificationLabel(effect.route)}
+                {classificationLabel(effect.analyses)}
               </span>
             </div>
             <p className="mt-2 break-all font-mono text-[0.7rem] leading-5 text-fd-muted-foreground">
               {summarizeBlackboard(effect) || '无黑板参数'}
             </p>
             <div className="mt-2">
-              <ZoneBadges zones={effect.route.zoneIds} comments={comments} />
+              <ZoneBadges zones={supported.map((analysis) => analysis.zoneId)} comments={comments} />
             </div>
             <p className="mt-2 text-xs leading-5 text-fd-muted-foreground">
-              {prediction?.reason ?? effect.route.unclassifiedReason}
-            </p>
-            <p className="mt-1 break-all font-mono text-[0.65rem] text-fd-muted-foreground/80">
-              {prediction?.evidencePath ?? effect.route.effect.jsonPath}
+              {supported.length > 0
+                ? `生效条件：${supported.flatMap((analysis) => analysis.conditions).join('；') || '无额外条件'}`
+                : '当前生成程序没有可写入 FormulaBook 的贡献。'}
             </p>
           </article>
         );

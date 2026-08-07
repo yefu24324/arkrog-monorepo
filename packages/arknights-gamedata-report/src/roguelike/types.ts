@@ -1,13 +1,19 @@
 import type {
+  ArchiveCompScrap,
+  ArchiveCompWeather,
   BuffElement,
   Choice,
+  ChoiceScene,
   CustomizeDatum,
   CustomizeDatumDifficulty,
   Detail,
   DetailDifficulty,
   DetailRelic,
+  ErDatum,
+  Idea,
   Item,
   Module,
+  PassiveScrapDatum,
   Stage,
   Topic,
 } from "@arkrog/arknights-schema/types";
@@ -170,6 +176,54 @@ export interface ExportedRoguelikeTopicExtReport {
   /** 除难度外的完整 customizeData。 */
   customizeData: ExportedRoguelikeTopicExtCustomizeData;
 }
+
+/** 黑流树海实托邦的十类三阶段原始效果及档案关联。 */
+export interface ExportedRogue6RealUtopiaData {
+  /** `weather.mainWeatherData` 的三十条完整原始效果。 */
+  effects: Record<string, ErDatum>;
+  /** 仅保留上述效果的档案排序与解锁信息。 */
+  archive: ArchiveCompWeather["weathers"];
+}
+
+/** 黑流树海乌托邦入口、选项和完整战斗关卡闭包。 */
+export interface ExportedRogue6UtopiaData {
+  /** `scene_ro6_portal*` 的完整场景字典。 */
+  scenes: Record<string, ChoiceScene>;
+  /** `choice_ro6_portal*` 的完整选项字典。 */
+  choices: Record<string, Choice>;
+  /** 乌托邦 `ro6_c_*` 关卡及其主 Level、替换 Level。 */
+  battleStages: ExportedRogueStageReport;
+}
+
+/** 单个概念体的展示、机制和档案数据。 */
+export interface ExportedRogue6ConceptualEntity {
+  /** `details.items` 中的完整名称、描述与用途。 */
+  item: Item;
+  /** `passiveScrapData` 中的触发节点、层数和效果。 */
+  effect: PassiveScrapDatum;
+  /** `archiveComp.scrap.scraps` 中的排序与解锁信息。 */
+  archive: ArchiveCompScrap["scraps"][string];
+}
+
+/** 黑流树海六个概念体及其类型说明。 */
+export interface ExportedRogue6ConceptualEntitiesData {
+  /** `scrapTypeData.PASSIVE` 的概念体分类说明。 */
+  type: Idea;
+  /** 以概念体 ID 为键的完整关联数据。 */
+  entries: Record<string, ExportedRogue6ConceptualEntity>;
+}
+
+/** `rogue_6/topic_ext.json` 仅导出的三类主题特殊系统数据。 */
+export interface ExportedRogue6TopicExtReport {
+  realUtopia: ExportedRogue6RealUtopiaData;
+  utopia: ExportedRogue6UtopiaData;
+  conceptualEntities: ExportedRogue6ConceptualEntitiesData;
+}
+
+/** topic_ext 对其他主题保留旧结构，黑流树海使用专用精简结构。 */
+export type ExportedAnyRoguelikeTopicExtReport =
+  | ExportedRoguelikeTopicExtReport
+  | ExportedRogue6TopicExtReport;
 
 /** 报告生成器读取的完整主题表主结构。 */
 export interface RoguelikeTopicTableForReport {

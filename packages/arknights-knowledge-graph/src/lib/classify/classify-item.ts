@@ -1,4 +1,5 @@
 import { classifyRelicEffect } from "./classify-effect.js";
+import type { EngineSemanticRule } from "../domain/engine-rules.js";
 import type { MechanicIndex } from "./mechanic-index.js";
 import type {
   ExportedRelic,
@@ -16,21 +17,25 @@ export interface ClassifyRelicItemInput {
   detail: TopicDetailForClassify;
   /** 战斗模板索引。 */
   mechanicIndex: MechanicIndex;
+  /** 显式注入的声明式规则。 */
+  semanticRules?: readonly EngineSemanticRule[];
 }
 
 /** 对一件藏品汇总直接 relics buff 与关联 charBuffData 的乘区预测。 */
 export function classifyRelicItem(input: ClassifyRelicItemInput): ExportedRelic {
-  const { topicId, item, detail, mechanicIndex } = input;
+  const { topicId, item, detail, mechanicIndex, semanticRules } = input;
   const directBuffs = (detail.relics[item.id]?.buffs ?? []).map((buff, buffIndex) =>
     classifyRelicEffect({
       effectId: `effect:${topicId}:${item.id}:${buffIndex}`,
       source: "relics",
       sourceKind: "relics",
+      objectId: item.id,
       buffIndex,
       key: buff.key,
       blackboard: buff.blackboard,
       jsonPath: `$.details.${topicId}.relics[${JSON.stringify(item.id)}].buffs[${buffIndex}]`,
       mechanicIndex,
+      semanticRules,
     }),
   );
 
@@ -45,11 +50,13 @@ export function classifyRelicItem(input: ClassifyRelicItemInput): ExportedRelic 
           effectId: `effect:${topicId}:charBuffData:${characterBuff.id}:${buffIndex}`,
           source: `charBuffData:${characterBuff.id}`,
           sourceKind: `charBuffData:${characterBuff.id}`,
+          objectId: item.id,
           buffIndex,
           key: buff.key,
           blackboard: buff.blackboard,
           jsonPath: `$.details.${topicId}.charBuffData[${JSON.stringify(characterBuff.id)}].buffs[${buffIndex}]`,
           mechanicIndex,
+          semanticRules,
         }),
       ),
     );

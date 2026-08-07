@@ -5,10 +5,12 @@
 .source
 /content/docs/types
 /content/docs/relic-zones
+/content/docs/zone-validation
 /content/docs/relic-zone-validation
 /content/docs/index.mdx
 /content/docs/meta.json
 /public/data/relic-zones
+/public/data/zone-validation
 /public/data/relic-zone-validation
 /public/data/operators
 /public/data/enemies
@@ -19,20 +21,6 @@
 /public/data/roguelike
 /public/gamedata-report
 /generated
-
-# 由 scripts/generate-docs.ts 从 TypeScript/JSDoc 与 graph:export 组装
-/content/docs/types
-/content/docs/relic-zones
-/content/docs/relic-zone-validation
-/content/docs/index.mdx
-/content/docs/meta.json
-/public/data/relic-zones
-/public/data/relic-zone-validation
-/public/data/operators
-/public/data/enemies
-/public/data/wrapped-relics
-/public/data/relics
-/public/data/roguelike
 
 # test & build
 /coverage

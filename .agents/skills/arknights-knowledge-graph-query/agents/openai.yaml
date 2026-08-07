@@ -1,0 +1,4 @@
+interface:
+  display_name: "arknights-knowledge-graph-query"
+  short_description: "只读问答追踪并导出当前有效的明日方舟机制图谱关系数据"
+  default_prompt: "使用 $arknights-knowledge-graph-query 查询当前有效图谱并给出关系证据。"

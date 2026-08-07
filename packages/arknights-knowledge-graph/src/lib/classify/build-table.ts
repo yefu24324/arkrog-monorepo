@@ -1,4 +1,5 @@
 import { classifyRelicItem } from "./classify-item.js";
+import type { EngineSemanticRule } from "../domain/engine-rules.js";
 import type { MechanicIndex } from "./mechanic-index.js";
 import type { RelicZoneExport, TopicDetailForClassify } from "./types.js";
 
@@ -12,6 +13,8 @@ export interface BuildRelicZoneTableInput {
   detail: TopicDetailForClassify;
   /** 战斗模板索引。 */
   mechanicIndex: MechanicIndex;
+  /** 显式注入的声明式规则。 */
+  semanticRules?: readonly EngineSemanticRule[];
   /** 可选覆盖生成时间（测试用）。 */
   generatedAt?: string;
 }
@@ -36,10 +39,11 @@ export function buildRelicZoneTable(input: BuildRelicZoneTableInput): RelicZoneE
       item,
       detail: input.detail,
       mechanicIndex: input.mechanicIndex,
+      semanticRules: input.semanticRules,
     });
     effectCount += exported.effects.length;
     for (const effect of exported.effects) {
-      if (effect.evidenceStatuses.includes("verified")) verifiedEffectCount += 1;
+      if (effect.evidenceStatuses.includes("human_verified") || effect.evidenceStatuses.includes("verified")) verifiedEffectCount += 1;
       if (effect.evidenceStatuses.includes("inferred")) inferredEffectCount += 1;
       if (effect.classification === "unknown") unknownEffectCount += 1;
       if (effect.classification === "not_applicable") notApplicableEffectCount += 1;
@@ -55,7 +59,7 @@ export function buildRelicZoneTable(input: BuildRelicZoneTableInput): RelicZoneE
       "ArknightsGameData/zh_CN/gamedata/excel/roguelike_topic_table.json",
       "ArknightsGameData/zh_CN/gamedata/battle/buff_template_data.json",
       "packages/arknights-schema/src",
-      "packages/arknights-knowledge-graph/src/lib/domain/engine-rules.ts",
+      "调用方显式注入的声明式规则",
     ],
     scope: { itemType: "RELIC", itemCount: relicItems.length, effectCount },
     coverage: {

@@ -8,6 +8,8 @@ import {
   FormulaNodeExpression,
   FormulaZoneExpression,
   FormulaZoneId,
+  FORMULA_ZONE_NAMES,
+  formulaZoneName,
   item,
   printNumericFormula,
   printSymbolicFormula,
@@ -26,13 +28,19 @@ function createAttackBook(): FormulaBook {
 }
 
 describe("当前 FormulaBook 运行时", () => {
-  it("从统一索引区分四十四个 zone 和十八个派生 formula", () => {
+  it("为每个 FormulaZoneId 提供来自枚举注释的中文名", () => {
+    expect(Object.keys(FORMULA_ZONE_NAMES)).toEqual(Object.values(FormulaZoneId));
+    expect(formulaZoneName(FormulaZoneId.char_in_atk_mul)).toBe("干员局内攻击力倍率");
+    expect(formulaZoneName(FormulaZoneId.enemy_ep_damage_mul)).toBe("敌人受到元素损伤独立增幅");
+  });
+
+  it("从统一索引区分四十三个 zone 和十七个派生 formula", () => {
     const expressions = Object.values(new FormulaBook().zones);
 
-    // 四种敌方承伤放大各自新增易伤、脆弱和独立增幅三个可写 zone，以及一个派生公式。
-    expect(expressions).toHaveLength(62);
-    expect(expressions.filter((entry) => entry instanceof FormulaZoneExpression)).toHaveLength(44);
-    expect(expressions.filter((entry) => entry instanceof FormulaNodeExpression)).toHaveLength(18);
+    // 三种常规伤害各有易伤、脆弱和独立增幅；元素相关仅保留 FormulaBook 当前真实定义。
+    expect(expressions).toHaveLength(60);
+    expect(expressions.filter((entry) => entry instanceof FormulaZoneExpression)).toHaveLength(43);
+    expect(expressions.filter((entry) => entry instanceof FormulaNodeExpression)).toHaveLength(17);
   });
 
   it("藏品可以直接向 book 中的 zone 追加 item", () => {
@@ -107,7 +115,7 @@ describe("当前 FormulaBook 运行时", () => {
     expect(book.calculate(FormulaZoneId.char_final_def)).toBeCloseTo(1_021);
   });
 
-  it("四种敌方承伤放大都按易伤加算、脆弱取最高和独立增幅相乘", () => {
+  it("三种敌方承伤放大都按易伤加算、脆弱取最高和独立增幅相乘", () => {
     const cases = [
       {
         taken: FormulaZoneId.enemy_phy_taken_add,
@@ -126,12 +134,6 @@ describe("当前 FormulaBook 运行时", () => {
         fragile: FormulaZoneId.enemy_pure_fragile,
         damage: FormulaZoneId.enemy_pure_damage_mul,
         final: FormulaZoneId.enemy_final_pure_damage_scale,
-      },
-      {
-        taken: FormulaZoneId.enemy_ep_taken_add,
-        fragile: FormulaZoneId.enemy_ep_fragile,
-        damage: FormulaZoneId.enemy_ep_damage_mul,
-        final: FormulaZoneId.enemy_final_ep_damage_scale,
       },
     ] as const;
 

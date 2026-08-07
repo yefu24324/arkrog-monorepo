@@ -64,12 +64,20 @@ gamedata-report/
 
 ### roguelike/{topicId}/topic_ext.json
 
-无损保留未归入其他三个主题文件的数据：
+除黑流树海外，无损保留未归入其他三个主题文件的数据：
 
 - `details` 排除 `difficulties`、`stages`、`relics`，其中 `items` 仅保留非藏品，`charBuffData` 仅保留未关联藏品的数据。
 - `modules` 完整保留。
 - `customizeData` 排除已进入 `topic.json` 的 `difficulties`，其余字段完整保留。
 - 空字段也保留，确保结构稳定并避免新主题机制被白名单遗漏。
+
+`rogue_6/topic_ext.json` 是专用精简结构，顶层只包含：
+
+- `realUtopia`：实托邦 `mainWeatherData` 的10类、每类早中晚3阶段完整效果，以及档案排序和解锁信息。
+- `utopia`：乌托邦 `portal` 场景、完整选项，以及9个战斗关卡的 Stage、主 Level 和替换 Level。
+- `conceptualEntities`：6个概念体的完整 Item、`passiveScrapData` 效果和档案信息。
+
+当前数据为 `10 × 3`、9个乌托邦战斗关卡和6个概念体。生成器会按类别自动纳入未来新增对象，并严格校验阶段、场景、Item、档案和 Level 关联；任何关联缺失都会阻断生成。
 
 报告 JSON 不写入 `schemaVersion` 或 `sources`。每类报告的数据来源由对应 `src/**/export-*.ts` 文件顶部的中文注释标明。
 

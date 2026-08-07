@@ -8,4 +8,10 @@ describe("原始 Cypher 查询保护", () => {
       "每次只允许一条 Cypher",
     );
   });
+
+  it("在检查图谱状态前拒绝写入语句", async () => {
+    await expect(runCypher("CREATE (n:Item {id: 'x'}) RETURN n")).rejects.toThrow(
+      "只允许只读查询",
+    );
+  });
 });

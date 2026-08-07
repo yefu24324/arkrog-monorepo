@@ -1,13 +1,16 @@
 /**
  * 生成 `roguelike/{topicId}/topic_ext.json`。
  * 数据来源：roguelike_topic_table.json 中未归入 topic/relics/stage 报告的
- * details、完整 modules 与除 difficulties 外的 customizeData。
+ * details、modules 与 customizeData；rogue_6 仅导出实托邦、乌托邦和概念体。
  */
 
 import type { Detail } from "@arkrog/arknights-schema/types";
 
 import { characterBuffBelongsToRelic } from "#roguelike/wrapped-relics";
 import type {
+  ExportedAnyRoguelikeTopicExtReport,
+  ExportedRogue6TopicExtReport,
+  ExportedRogueStageReport,
   ExportedRoguelikeTopicExtReport,
   OriginalRelicCharacterBuffData,
   RoguelikeTopicTableForReport,
@@ -17,7 +20,12 @@ import type {
 export function buildTopicExtReport(
   table: RoguelikeTopicTableForReport,
   topicId: string,
-): ExportedRoguelikeTopicExtReport {
+  stageReport?: ExportedRogueStageReport,
+): ExportedAnyRoguelikeTopicExtReport {
+  if (topicId === "rogue_6") {
+    if (!stageReport) throw new Error("rogue_6 topic_ext 需要完整 stage report 以导出乌托邦战斗数据");
+    return buildRogue6TopicExtReport(table, stageReport);
+  }
   const detail = table.details[topicId]!;
   const {
     difficulties: _difficulties,
@@ -49,5 +57,73 @@ export function buildTopicExtReport(
     },
     modules: table.modules[topicId]!,
     customizeData: remainingCustomizeData,
+  };
+}
+
+/** 选择字典中满足稳定 ID 前缀的对象，并保留原始值。 */
+function selectByIdPrefix<T>(values: Record<string, T>, prefix: string): Record<string, T> {
+  return Object.fromEntries(Object.entries(values).filter(([id]) => id.startsWith(prefix)));
+}
+
+/** 构建黑流树海三类目标数据；数量或引用缺失时阻断生成。 */
+function buildRogue6TopicExtReport(
+  table: RoguelikeTopicTableForReport,
+  stageReport: ExportedRogueStageReport,
+): ExportedRogue6TopicExtReport {
+  const detail = table.details.rogue_6!;
+  const module = table.modules.rogue_6!;
+  if (!module.weather || !module.scrap || !detail.archiveComp.weather || !detail.archiveComp.scrap) {
+    throw new Error("rogue_6 缺少 weather、scrap 或对应 archiveComp 数据");
+  }
+
+  const realUtopiaEffects = module.weather.mainWeatherData;
+  const realUtopiaTypes = new Set(Object.values(realUtopiaEffects).map((effect) => effect.type));
+  for (const type of realUtopiaTypes) {
+    const levels = new Set<string>(Object.values(realUtopiaEffects)
+      .filter((effect) => effect.type === type)
+      .map((effect) => effect.levelName));
+    if (levels.size !== 3 || !["早期", "中期", "晚期"].every((level) => levels.has(level))) {
+      throw new Error(`rogue_6 实托邦 ${type} 缺少早期、中期或晚期完整阶段`);
+    }
+  }
+  const realUtopiaArchive = Object.fromEntries(
+    Object.entries(detail.archiveComp.weather.weathers)
+      .filter(([weatherId]) => weatherId in realUtopiaEffects),
+  );
+  if (Object.keys(realUtopiaArchive).length !== Object.keys(realUtopiaEffects).length) {
+    throw new Error("rogue_6 实托邦档案数据未完整关联全部阶段");
+  }
+
+  const scenes = selectByIdPrefix(detail.choiceScenes, "scene_ro6_portal");
+  const choices = selectByIdPrefix(detail.choices, "choice_ro6_portal");
+  const battleStages = selectByIdPrefix(stageReport, "ro6_c_");
+  if (Object.keys(scenes).length === 0 || Object.keys(choices).length === 0 || Object.keys(battleStages).length === 0) {
+    throw new Error("rogue_6 乌托邦场景、选项或战斗关卡关联不完整");
+  }
+  for (const choice of Object.values(choices)) {
+    if (choice.nextSceneId?.startsWith("scene_ro6_portal") && !scenes[choice.nextSceneId]) {
+      throw new Error(`rogue_6 乌托邦选项 ${choice.id} 引用了缺失场景 ${choice.nextSceneId}`);
+    }
+  }
+
+  const conceptualEntityEntries = Object.fromEntries(
+    Object.entries(module.scrap.passiveScrapData).map(([scrapId, effect]) => {
+      const item = detail.items[scrapId];
+      const archive = detail.archiveComp.scrap!.scraps[scrapId];
+      if (!item || !archive) throw new Error(`rogue_6 概念体 ${scrapId} 缺少 Item 或档案关联`);
+      return [scrapId, { item, effect, archive }];
+    }),
+  );
+  if (Object.keys(conceptualEntityEntries).length === 0) {
+    throw new Error("rogue_6 未发现概念体 passiveScrapData");
+  }
+
+  return {
+    realUtopia: { effects: realUtopiaEffects, archive: realUtopiaArchive },
+    utopia: { scenes, choices, battleStages },
+    conceptualEntities: {
+      type: module.scrap.scrapTypeData.PASSIVE,
+      entries: conceptualEntityEntries,
+    },
   };
 }

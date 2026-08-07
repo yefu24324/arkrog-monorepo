@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/components/combat-preview-panel.tsx",
+    "src/components/relic-zone-table.tsx",
+    "src/components/relic-zone-validation-table.tsx",
+    "src/components/relic-zone-validation-explorer.tsx",
+    "src/components/formula-expr-popover.tsx",
+    "src/lib/cn.ts",
+    "src/lib/formula-book-runtime.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

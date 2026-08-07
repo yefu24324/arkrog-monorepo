@@ -5,13 +5,15 @@
   "type": "module",
   "scripts": {
     "graph:build": "pnpm --filter @arkrog/arknights-knowledge-graph build",
-    "docs:generate": "arknights-gamedata-report --out public/gamedata-report && pnpm graph:build && tsx scripts/generate-docs.ts",
+    "graph:export-relic-zones": "pnpm --filter @arkrog/arknights-knowledge-graph graph:export-relic-zones -- all --out packages/arknights-schema-docs/public/data/zone-validation/graph",
+    "docs:generate": "arknights-gamedata-report --out public/gamedata-report && pnpm graph:build && pnpm graph:export-relic-zones && tsx scripts/generate-docs.ts",
     "predev": "pnpm docs:generate",
     "dev": "next dev",
     "prebuild": "pnpm docs:generate && fumadocs-mdx",
     "build": "next build",
     "start": "next start",
     "types:check": "pnpm docs:generate && fumadocs-mdx && next typegen && tsc --noEmit",
+    "test": "tsx --test src/lib/*.test.ts",
     "postinstall": "fumadocs-mdx",
     "lint": "eslint"
   },

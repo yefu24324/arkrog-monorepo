@@ -1,4 +1,7 @@
-import { predictEngineZones } from "../domain/engine-rules.js";
+import {
+  predictEngineZonesWithRules,
+  type EngineSemanticRule,
+} from "../domain/engine-rules.js";
 import { resolveMechanicName, type MechanicIndex } from "./mechanic-index.js";
 import type { BlackboardValue, ExportedRelicEffect, ExportedZonePrediction } from "./types.js";
 
@@ -85,6 +88,8 @@ export interface ClassifyRelicEffectInput {
   effectId: string;
   /** relics 或 charBuffData:... 来源标签。 */
   source: string;
+  /** 所属游戏对象 ID。 */
+  objectId?: string;
   /** buffs 零基下标。 */
   buffIndex: number;
   /** buff 载体 key。 */
@@ -97,6 +102,8 @@ export interface ClassifyRelicEffectInput {
   mechanicIndex: MechanicIndex;
   /** 效果来源种类，写入 EngineEffectFacts.sourceKind。 */
   sourceKind?: string;
+  /** 显式注入的声明式规则；空数组表示不产生具体知识结论。 */
+  semanticRules?: readonly EngineSemanticRule[];
 }
 
 /**
@@ -109,7 +116,9 @@ export function classifyRelicEffect(input: ClassifyRelicEffectInput): ExportedRe
   const actions = [...(input.mechanicIndex.get(mechanicName) ?? [])];
   const events = [...new Set(actions.map((action) => action.event))];
   const componentTypes = [...new Set(actions.map((action) => action.componentType).filter(Boolean))];
-  const predictionsRaw = predictEngineZones({
+  const predictionsRaw = predictEngineZonesWithRules(input.semanticRules ?? [], {
+    objectId: input.objectId ?? "",
+    objectType: "relic",
     effectKey: input.key,
     parameters: parameterMap(input.blackboard),
     mechanicName,
