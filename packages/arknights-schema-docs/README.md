@@ -34,7 +34,9 @@ pnpm schema:docs:build
 - 类型字段使用 `CnTypeTable` 展示，类型名称可跳转到对应模块页面。
 - `TypeSource` 展示逻辑模块的 TypeScript 源码快照。
 - `RelicZoneExplorer` 负责主题选择、搜索、乘区过滤及 buffs 原数据展开。
-- `ZoneValidationExplorer` 对照 Graph、页面即时运行的 Mechanics 与人工历史。当前先实现藏品，契约允许未来并列增加难度和主题特殊系统。
+- `ZoneValidationExplorer` 对照 Graph、页面即时运行的 Mechanics 与人工历史；藏品执行完整三方校验，NORMAL 难度先展示 GameData 行和待补充的分析占位列。
+- 藏品乘区页的 NORMAL 难度按等级降序展示，单行只分析本级乘区；属性预览通过 `applyDifficulty` 累计应用所选等级及以下规则。
+- `rogue_6` 在难度表后展示实托邦、乌托邦与概念体；藏品乘区页把选择累计应用到 FormulaBook，乘区校验页仅保留待分析占位列。
 
 ## 人工乘区历史
 

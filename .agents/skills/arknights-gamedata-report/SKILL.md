@@ -27,7 +27,7 @@ description: 维护 @arkrog/arknights-gamedata-report 的导出结构、类型�
 - `relics.json` 保持裸数组，并保留 `pinyin`、`layer`、`enable`。
 - `stage.json` 保持关卡 ID 字典，替换 Level 保持 levelId 字典。
 - 除 `rogue_6` 外，`topic_ext.json` 无损保存其余主题数据，避免与 topic/relics/stage 大块重复；新字段默认不得因白名单遗漏。
-- `rogue_6/topic_ext.json` 只导出实托邦、乌托邦、概念体。实托邦来自 `weather.mainWeatherData`（当前10类、每类早中晚三阶段，如“黑流地脉”“希望的沃土”），不能误用4条 `subWeatherData`；乌托邦保留 portal 场景、选项及完整战斗 Stage/Level；概念体来自 `passiveScrapData`（当前6条）并保留 Item 与档案数据。类别内未来新增对象必须自动纳入，缺少阶段或战斗关联时阻断生成。
+- `rogue_6/topic_ext.json` 只导出实托邦、乌托邦、概念体。实托邦来自 `weather.mainWeatherData`（当前10类、每类早中晚三阶段，如“黑流地脉”“希望的沃土”），不能误用4条 `subWeatherData`；乌托邦来自 `details.rogue_6.variationData`（当前9个 Buff，如“巨人摇篮”），不能误用 portal 场景或 `ro6_c_*` 战斗关卡；概念体来自 `passiveScrapData`（当前6条）并保留 Item 与档案数据。类别内未来新增对象必须自动纳入，缺少阶段、Buff 或档案关联时阻断生成。
 - 先验证全部输入文件，再清理输出；只清理 `operators/`、`operators.json`、`roguelike/`、`roguelike.json`。
 - `--out` 只接受相对路径并以 `process.cwd()` 为基准；不要改用包目录或 `INIT_CWD`。
 - 包公开原始 TypeScript，不生成 JS；内部使用 package imports，避免向消费者暴露 `.ts` 后缀相对导入要求。
@@ -100,7 +100,7 @@ pnpm report:gamedata-report
 - 每个 `rogue_N` 恰有 `topic.json`、`relics.json`、`stage.json`、`topic_ext.json`。
 - 顶层没有 `schemaVersion` 或 `sources`。
 - 普通主题的 `topic_ext` 不含 `difficulties`、`stages`、`relics`，其 `customizeData` 不含 `difficulties`；`rogue_6/topic_ext` 顶层只能有 `realUtopia`、`utopia`、`conceptualEntities`。
-- `rogue_6` 当前应审计为实托邦10类30阶段、乌托邦9个完整战斗 Stage/Level、概念体6个完整 Item/effect/archive 关联；生成器按类别动态纳入未来新增对象。
+- `rogue_6` 当前应审计为实托邦10类30阶段、乌托邦9个完整 Buff/archive 关联、概念体6个完整 Item/effect/archive 关联；生成器按类别动态纳入未来新增对象。
 - 缺失召唤物只出现在 `missingTokenIds`，并追踪其原始引用。
 
 涉及 schema 时运行 schema typecheck/test。涉及消费者时运行：

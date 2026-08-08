@@ -4,7 +4,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronDown, Copy, Download, Save, Search, X } from 'lucide-react';
-import type { ExportedRelicsReport, WrappedRelicItem } from '@arkrog/arknights-gamedata-report';
+import type {
+  ExportedRogue6TopicExtReport,
+  ExportedRelicsReport,
+  ExportedRoguelikeTopicReport,
+  WrappedRelicItem,
+} from '@arkrog/arknights-gamedata-report';
 import {
   FORMULA_ZONE_NAMES,
   type FormulaZoneId,
@@ -13,6 +18,16 @@ import { analyzeRelic } from '@arkrog/arknights-knowledge-graph/mechanics';
 import { cn } from '@/lib/cn';
 import { useRoguelikeStageOptions } from '@/hooks/use-roguelike-stage-options';
 import { RoguelikeStageSelector } from '@/components/roguelike-stage-selector';
+import { DifficultyValidationTable } from '@/components/roguelike-difficulty-table';
+import { Rogue6TopicEffectValidationTable } from '@/components/rogue6-topic-effect-table';
+import {
+  buildNormalDifficultyRows,
+  difficultyMatchesSearch,
+} from '@/lib/roguelike-difficulties';
+import {
+  buildRogue6TopicEffectRows,
+  rogue6TopicEffectMatchesSearch,
+} from '@/lib/rogue6-topic-effects';
 import {
   compareZoneValidation,
   createMechanicsHistoryRecord,
@@ -230,10 +245,12 @@ function downloadJson(fileName: string, content: string): void {
   URL.revokeObjectURL(url);
 }
 
-/** 文档站通用乘区校验主表；本次只实现藏品分区。 */
+/** 文档站乘区校验主表：藏品执行三方校验，难度先展示 GameData 占位表。 */
 export function ZoneValidationTable({ topicId, className }: ZoneValidationTableProps) {
   const [graph, setGraph] = useState<GraphZoneValidationData | null>(null);
   const [relics, setRelics] = useState<ExportedRelicsReport | null>(null);
+  const [topicReport, setTopicReport] = useState<ExportedRoguelikeTopicReport | null>(null);
+  const [rogue6TopicExt, setRogue6TopicExt] = useState<ExportedRogue6TopicExtReport | null>(null);
   const [zoneComments, setZoneComments] = useState<Record<string, string>>({});
   const [history, setHistory] = useState<HumanZoneValidationDocument | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -262,13 +279,25 @@ export function ZoneValidationTable({ topicId, className }: ZoneValidationTableP
         if (!response.ok) throw new Error(`relics: HTTP ${response.status}`);
         return response.json() as Promise<ExportedRelicsReport>;
       }),
-    ]).then(async ([graphData, formulaBook, relicData]) => {
+      fetch(`/gamedata-report/roguelike/${topicId}/topic.json`).then(async (response) => {
+        if (!response.ok) throw new Error(`topic: HTTP ${response.status}`);
+        return response.json() as Promise<ExportedRoguelikeTopicReport>;
+      }),
+      topicId === 'rogue_6'
+        ? fetch('/gamedata-report/roguelike/rogue_6/topic_ext.json').then(async (response) => {
+          if (!response.ok) throw new Error(`topic_ext: HTTP ${response.status}`);
+          return response.json() as Promise<ExportedRogue6TopicExtReport>;
+        })
+        : Promise.resolve(null),
+    ]).then(async ([graphData, formulaBook, relicData, reportData, topicExtData]) => {
       if (cancelled) return;
       if (graphData.producer?.kind !== 'graph') throw new Error('Graph 文件缺少 graph 来源标记');
       const comments = { ...formulaBook.writableZoneComments };
       for (const formula of formulaBook.formulas ?? []) collectFormulaZoneComments(formula, comments);
       setGraph(graphData);
       setRelics(relicData);
+      setTopicReport(reportData);
+      setRogue6TopicExt(topicExtData);
       setZoneComments(comments);
       setLoadError(null);
       try {
@@ -301,6 +330,20 @@ export function ZoneValidationTable({ topicId, className }: ZoneValidationTableP
   }, [changedIds.length]);
 
   const mechanics = useMemo(() => relics?.map((relic) => analyzeMechanicsItem(relic, topicId)) ?? [], [relics, topicId]);
+  // 校验页本次只建立 GameData 行，不调用难度 Mechanics 或 Graph 分析。
+  const difficultyRows = useMemo(
+    () => topicReport ? buildNormalDifficultyRows(topicReport, topicId, false) : [],
+    [topicId, topicReport],
+  );
+  // 主题效果校验页与难度相同，只建立纯 GameData 行，不运行 Mechanics。
+  const topicEffectRows = useMemo(
+    () => rogue6TopicExt ? buildRogue6TopicEffectRows(rogue6TopicExt, false) : {
+      realUtopia: [],
+      utopia: [],
+      conceptualEntities: [],
+    },
+    [rogue6TopicExt],
+  );
   const rows = useMemo<ValidationRow[]>(() => {
     if (!graph) return [];
     const graphById = new Map(graph.items.map((entry) => [entry.id, entry]));
@@ -332,6 +375,13 @@ export function ZoneValidationTable({ topicId, className }: ZoneValidationTableP
     return true;
   });
   const mismatchCount = rows.filter((row) => !row.comparison.matches).length;
+  const filteredDifficultyRows = difficultyRows.filter((row) =>
+    difficultyMatchesSearch(row, normalizedQuery, zoneComments));
+  const filterTopicEffects = (effectRows: readonly (typeof topicEffectRows.realUtopia)[number][]) =>
+    effectRows.filter((row) => rogue6TopicEffectMatchesSearch(row, normalizedQuery, zoneComments));
+  const filteredRealUtopia = filterTopicEffects(topicEffectRows.realUtopia);
+  const filteredUtopia = filterTopicEffects(topicEffectRows.utopia);
+  const filteredConceptualEntities = filterTopicEffects(topicEffectRows.conceptualEntities);
   const expanded = new Set(expandedIds);
 
   /** 用当前 Mechanics 结果整条覆盖指定藏品的历史草稿。 */
@@ -359,7 +409,7 @@ export function ZoneValidationTable({ topicId, className }: ZoneValidationTableP
   if (loadError) {
     return <div className={cn('not-prose my-6 rounded-2xl border border-dashed p-6 text-sm text-fd-muted-foreground', className)}>加载乘区校验数据失败：{loadError}。请运行 <code>pnpm docs:generate</code>。</div>;
   }
-  if (!graph || !relics) {
+  if (!graph || !relics || !topicReport || (topicId === 'rogue_6' && !rogue6TopicExt)) {
     return <div className={cn('not-prose my-6 rounded-2xl border p-8 text-center text-sm text-fd-muted-foreground', className)}>正在加载 Graph 并运行 Mechanics 分析…</div>;
   }
 
@@ -369,7 +419,7 @@ export function ZoneValidationTable({ topicId, className }: ZoneValidationTableP
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-base font-semibold">{graph.topic.name}</h2>
-            <p className="mt-1 text-sm text-fd-muted-foreground">{rows.length} 件藏品 · 三方差异 {mismatchCount} 件</p>
+            <p className="mt-1 text-sm text-fd-muted-foreground">{rows.length} 件藏品 · {difficultyRows.length} 个 NORMAL 难度{rogue6TopicExt ? ` · ${topicEffectRows.realUtopia.length} 个实托邦阶段 · ${topicEffectRows.utopia.length} 个乌托邦状态 · ${topicEffectRows.conceptualEntities.length} 个概念体` : ''} · 三方差异 {mismatchCount} 件</p>
             <p className="mt-1 text-xs text-fd-muted-foreground">Graph 来自图谱导出；Mechanics 由当前程序即时分析；历史版本由人工维护。</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -386,7 +436,7 @@ export function ZoneValidationTable({ topicId, className }: ZoneValidationTableP
         {orphanCount > 0 ? <p className="mt-2 text-xs text-amber-600 dark:text-amber-300">存在 {orphanCount} 条当前 GameData 中已不存在的历史记录；导出时会原样保留在末尾。</p> : null}
         <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap gap-2">{([['all', `全部 ${rows.length}`], ['mismatch', `差异 ${mismatchCount}`], ['match', `一致 ${rows.length - mismatchCount}`]] as Array<[ValidationFilter, string]>).map(([value, label]) => <button key={value} type="button" onClick={() => setFilter(value)} className={cn('rounded-full border px-3 py-1 text-xs', filter === value ? 'border-fd-primary bg-fd-primary/10 text-fd-primary' : 'text-fd-muted-foreground hover:text-fd-foreground')}>{label}</button>)}</div>
-          <label className="relative block w-full max-w-md"><Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-fd-muted-foreground" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索藏品名、ID、原文…" className="w-full rounded-xl border bg-fd-background py-2 pr-9 pl-9 text-sm outline-none focus:border-fd-primary" />{query ? <button type="button" aria-label="清空搜索" onClick={() => setQuery('')} className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-fd-muted-foreground hover:bg-fd-accent"><X className="size-3.5" /></button> : null}</label>
+          <label className="relative block w-full max-w-md"><Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-fd-muted-foreground" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索藏品、难度、主题效果、ID 或原文…" className="w-full rounded-xl border bg-fd-background py-2 pr-9 pl-9 text-sm outline-none focus:border-fd-primary" />{query ? <button type="button" aria-label="清空搜索" onClick={() => setQuery('')} className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-fd-muted-foreground hover:bg-fd-accent"><X className="size-3.5" /></button> : null}</label>
         </div>
       </div>
       <section className="rounded-2xl border bg-fd-card p-4 shadow-sm">
@@ -398,6 +448,16 @@ export function ZoneValidationTable({ topicId, className }: ZoneValidationTableP
         {filtered.map((row) => <ValidationTableRow key={row.id} row={row} expanded={expanded.has(row.id)} comments={zoneComments} historyDisabled={!history} changed={changedIds.includes(row.id)} saved={savedId === row.id} onSave={() => saveToHistory(row)} onToggle={() => setExpandedIds((previous) => previous.includes(row.id) ? previous.filter((id) => id !== row.id) : [...previous, row.id])} />)}
         {filtered.length === 0 ? <tr><td colSpan={5} className="px-4 py-10 text-center text-fd-muted-foreground">没有匹配的藏品。</td></tr> : null}
       </tbody></table></div>
+      <DifficultyValidationTable
+        topicId={topicId}
+        rows={filteredDifficultyRows}
+        totalCount={difficultyRows.length}
+      />
+      {rogue6TopicExt ? <>
+        <Rogue6TopicEffectValidationTable kind="realUtopia" rows={filteredRealUtopia} totalCount={topicEffectRows.realUtopia.length} />
+        <Rogue6TopicEffectValidationTable kind="utopia" rows={filteredUtopia} totalCount={topicEffectRows.utopia.length} />
+        <Rogue6TopicEffectValidationTable kind="conceptualEntity" rows={filteredConceptualEntities} totalCount={topicEffectRows.conceptualEntities.length} />
+      </> : null}
     </div>
   );
 }

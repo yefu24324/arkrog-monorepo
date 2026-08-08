@@ -9,7 +9,6 @@ import { buildWrappedRelicItems } from "../src/roguelike/wrapped-relics.ts";
 import { buildTopicExtReport } from "../src/roguelike/export-topic-ext.ts";
 import type {
   ExportedRogue6TopicExtReport,
-  ExportedRogueStageReport,
   RoguelikeTopicTableForReport,
 } from "../src/roguelike/types.ts";
 
@@ -56,16 +55,9 @@ describe("藏品报告", () => {
 });
 
 describe("黑流树海主题扩展报告", () => {
-  it("只导出实托邦、乌托邦、概念体并完整携带战斗数据", async () => {
+  it("只导出实托邦、乌托邦 Buff 和概念体的完整关联", async () => {
     const table = JSON.parse(await readFile(TOPIC_TABLE_PATH, "utf8")) as RoguelikeTopicTableForReport;
-    const stageReport = Object.fromEntries(
-      Object.entries(table.details.rogue_6!.stages).map(([stageId, stage]) => [
-        stageId,
-        { stage, level: { levelId: stage.levelId }, replacementLevels: {} },
-      ]),
-    ) as ExportedRogueStageReport;
-
-    const report = buildTopicExtReport(table, "rogue_6", stageReport) as ExportedRogue6TopicExtReport;
+    const report = buildTopicExtReport(table, "rogue_6") as ExportedRogue6TopicExtReport;
     expect(Object.keys(report).sort()).toEqual(["conceptualEntities", "realUtopia", "utopia"]);
 
     const effects = Object.values(report.realUtopia.effects);
@@ -76,10 +68,11 @@ describe("黑流树海主题扩展报告", () => {
     expect(effects.some((effect) => effect.name === "“希望的沃土”")).toBe(true);
     expect(Object.keys(report.realUtopia.effects).some((id) => id.includes("subweather"))).toBe(false);
 
-    expect(Object.keys(report.utopia.scenes)).toHaveLength(76);
-    expect(Object.keys(report.utopia.choices)).toHaveLength(114);
-    expect(Object.keys(report.utopia.battleStages)).toHaveLength(9);
-    expect(Object.values(report.utopia.battleStages).every((entry) => Boolean(entry.level))).toBe(true);
+    const utopiaEffects = Object.values(report.utopia.effects);
+    expect(utopiaEffects).toHaveLength(9);
+    expect(new Set(utopiaEffects.map((effect) => effect.type))).toEqual(new Set(["BAT", "MAP", "RES"]));
+    expect(utopiaEffects.some((effect) => effect.outerName === "“巨人摇篮”")).toBe(true);
+    expect(Object.keys(report.utopia.archive)).toHaveLength(9);
 
     const conceptualEntities = Object.values(report.conceptualEntities.entries);
     expect(conceptualEntities).toHaveLength(6);

@@ -7,7 +7,7 @@ interface ZoneValidationExplorerProps {
   topicId: string;
 }
 
-/** 文档站“乘区校验”栏目入口；本次先展示藏品。 */
+/** 文档站“乘区校验”栏目入口，展示藏品校验与 NORMAL 难度占位表。 */
 export function ZoneValidationExplorer({ topicId }: ZoneValidationExplorerProps) {
   return <ZoneValidationTable topicId={topicId} />;
 }

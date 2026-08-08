@@ -17,6 +17,7 @@ import type {
   LocalTopicSystemInterpretationFile,
   TopicSystemInterpretation,
 } from "./topic-systems.js";
+import type { LocalDifficultyGraphRule } from "./difficulties.js";
 
 /** 当前清单格式；变更输入口径或发布协议时必须递增。 */
 export const GRAPH_MANIFEST_SCHEMA_VERSION = 2;
@@ -41,6 +42,9 @@ export interface LocalGraphRuleFile {
   preparedInputsDigest: string;
   /** AI 无法唯一解释且必须询问人类的问题。 */
   conflicts?: Array<{ id: string; question: string; evidencePaths: string[] }>;
+  /** 基于完整 ruleDesc 护栏的肉鸽 NORMAL 难度解释。 */
+  difficultyRules?: LocalDifficultyGraphRule[];
+  /** 战斗模板、黑板与普通对象使用的通用规则。 */
   rules: LocalGraphRule[];
 }
 
@@ -159,6 +163,7 @@ export async function collectGraphInputs(paths: RepositoryPaths): Promise<GraphI
     path.join(paths.root, "packages", "arknights-knowledge-graph", "src", "lib", "formula", "ast.ts"),
     path.join(paths.root, "packages", "arknights-knowledge-graph", "src", "lib", "domain", "engine-rules.ts"),
     path.join(paths.root, "packages", "arknights-knowledge-graph", "src", "tools", "build.ts"),
+    path.join(paths.root, "packages", "arknights-knowledge-graph", "src", "tools", "difficulties.ts"),
     path.join(paths.root, "packages", "arknights-knowledge-graph", "src", "tools", "graph-workspace.ts"),
     path.join(paths.root, "packages", "arknights-knowledge-graph", "src", "tools", "topic-systems.ts"),
     path.join(paths.root, "packages", "arknights-knowledge-graph", "src", "tools", "graph", "schema.ts"),
@@ -276,6 +281,7 @@ export function currentCoverage(paths: RepositoryPaths): GraphCoverageReport {
   return {
     coveredObjectTypes: [
       "肉鸽主题",
+      "六主题 NORMAL 难度、结构化效果与科技启用关系",
       "主题特殊系统及递归对象字段",
       "特殊系统 Buff、显示效果与引用",
       "肉鸽物品",
@@ -290,7 +296,7 @@ export function currentCoverage(paths: RepositoryPaths): GraphCoverageReport {
       "packages/arknights-schema/src/**/*.ts",
     ],
     uncoveredObjectTypes: ["关卡机制", "干员技能与模组", "非肉鸽 GameData 机制表"],
-    note: "主题特殊系统按 topics + moduleTypes 自动发现并递归完整入图；未知语义保留为 unknown，不等同于数据未覆盖。",
+    note: "难度只覆盖 rogue_1 至 rogue_6 的 NORMAL；主题特殊系统按 topics + moduleTypes 自动发现并递归完整入图；未知语义保留为 unknown，不等同于数据未覆盖。",
   };
 }
 
@@ -478,7 +484,11 @@ export async function loadAndValidateTopicSystemInterpretations(
 /** 从本地读取并严格校验规则，不允许回退到源码内置具体规则。 */
 export async function loadAndValidateLocalRules(
   databaseOverride?: string,
-): Promise<{ rules: LocalGraphRule[]; conflicts: string[] }> {
+): Promise<{
+  rules: LocalGraphRule[];
+  difficultyRules: LocalDifficultyGraphRule[];
+  conflicts: string[];
+}> {
   const paths = resolveRepositoryPaths(databaseOverride);
   const files = await listFiles(paths.graphRules, ".json");
   const writableZones = new Set<FormulaWritableZoneId>(
@@ -487,6 +497,7 @@ export async function loadAndValidateLocalRules(
       .map((zone) => zone.zoneId as FormulaWritableZoneId),
   );
   const rules: LocalGraphRule[] = [];
+  const difficultyRules: LocalDifficultyGraphRule[] = [];
   const conflicts: string[] = [];
   const currentInputsDigest = digest(JSON.stringify(await collectGraphInputs(paths)));
   for (const file of files) {
@@ -544,10 +555,49 @@ export async function loadAndValidateLocalRules(
       }
       rules.push(value as unknown as LocalGraphRule);
     }
+    if (parsed.difficultyRules !== undefined && !Array.isArray(parsed.difficultyRules)) {
+      conflicts.push(`${toRepositoryPath(paths.root, file)} difficultyRules 不是数组`);
+    }
+    for (const [index, value] of (Array.isArray(parsed.difficultyRules)
+      ? parsed.difficultyRules
+      : []).entries()) {
+      if (!isRecord(value)) {
+        conflicts.push(`${toRepositoryPath(paths.root, file)} difficultyRules[${index}] 不是对象`);
+        continue;
+      }
+      const authority = value.authority;
+      const zoneId = value.zoneId;
+      const evidencePaths = value.evidencePaths;
+      const valid =
+        typeof value.id === "string"
+        && Number.isInteger(value.version)
+        && typeof value.name === "string"
+        && typeof value.description === "string"
+        && /^rogue_[1-6]$/.test(String(value.topicId))
+        && value.modeDifficulty === "NORMAL"
+        && Number.isInteger(value.grade)
+        && typeof value.expectedRuleDesc === "string"
+        && typeof value.matchedText === "string"
+        && value.matchedText.length > 0
+        && (value.coverage === "full" || value.coverage === "partial")
+        && typeof zoneId === "string" && writableZones.has(zoneId as FormulaWritableZoneId)
+        && typeof value.value === "number" && Number.isFinite(value.value)
+        && ["all-enemies", "elite", "elite-and-boss", "boss", "specific-enemy"].includes(String(value.target))
+        && (authority === "human" || authority === "formula" || authority === "gamedata")
+        && (value.status === "human_verified" || value.status === "verified" || value.status === "inferred" || value.status === "unknown")
+        && typeof value.confidence === "number" && value.confidence >= 0 && value.confidence <= 1
+        && Array.isArray(evidencePaths) && evidencePaths.every((entry) => typeof entry === "string")
+        && (value.status !== "inferred" || evidencePaths.length >= 2);
+      if (!valid) {
+        conflicts.push(`${toRepositoryPath(paths.root, file)} difficultyRules[${index}] 字段、乘区、护栏或证据状态无效`);
+        continue;
+      }
+      difficultyRules.push(value as unknown as LocalDifficultyGraphRule);
+    }
   }
 
   const ruleIds = new Set<string>();
-  for (const rule of rules) {
+  for (const rule of [...rules, ...difficultyRules]) {
     if (ruleIds.has(rule.id)) conflicts.push(`规则 ID 重复：${rule.id}`);
     ruleIds.add(rule.id);
     if (rule.authority === "human" && rule.status !== "human_verified") {
@@ -576,7 +626,7 @@ export async function loadAndValidateLocalRules(
   }
   await mkdir(path.dirname(paths.graphConflicts), { recursive: true });
   await writeFile(paths.graphConflicts, `${JSON.stringify({ conflicts }, null, 2)}\n`, "utf8");
-  return { rules, conflicts };
+  return { rules, difficultyRules, conflicts };
 }
 
 /** 写入正式图谱 manifest；只有发布成功后调用。 */

@@ -38,6 +38,10 @@ import {
   type TopicSystemInterpretation,
 } from "./topic-systems.js";
 import type { RepositoryPaths } from "./types.js";
+import {
+  normalizeDifficultyKnowledge,
+  type LocalDifficultyGraphRule,
+} from "./difficulties.js";
 
 /** Kuzu 批量写入接受的通用行。 */
 type Row = Record<string, KuzuValue>;
@@ -98,6 +102,7 @@ interface GraphDataset {
   externalReferences: Row[];
   difficulties: Row[];
   difficultyEffects: Row[];
+  difficultyTechnologies: Row[];
   effects: Row[];
   parameters: Row[];
   fields: Row[];
@@ -123,6 +128,7 @@ interface GraphDataset {
   schemaDescribesField: Row[];
   itemHasEffect: Row[];
   difficultyHasEffect: Row[];
+  difficultyEnablesTechnology: Row[];
   difficultyHasConditionalItem: Row[];
   effectHasParameter: Row[];
   effectUsesMechanic: Row[];
@@ -151,6 +157,7 @@ function createDataset(): GraphDataset {
   return {
     sources: [], schemas: [], items: [], topics: [], topicSystems: [], topicSystemObjects: [],
     topicSystemFields: [], topicSystemConcepts: [], externalReferences: [], difficulties: [], difficultyEffects: [],
+    difficultyTechnologies: [],
     effects: [], parameters: [], fields: [],
     mechanics: [], actions: [], semanticRules: [], zones: [],
     sourceDeclaresSchema: [], sourceContainsItem: [], sourceContainsTopic: [], topicHasSystem: [],
@@ -158,7 +165,7 @@ function createDataset(): GraphDataset {
     topicObjectHasEffect: [], topicObjectReferencesObject: [], topicObjectReferencesItem: [],
     topicObjectUsesMechanic: [], topicObjectReferencesExternal: [], sourceContainsDifficulty: [],
     sourceDefinesMechanic: [],
-    schemaDescribesField: [], itemHasEffect: [], difficultyHasEffect: [],
+    schemaDescribesField: [], itemHasEffect: [], difficultyHasEffect: [], difficultyEnablesTechnology: [],
     difficultyHasConditionalItem: [], effectHasParameter: [],
     effectUsesMechanic: [], mechanicHasAction: [], parameterMatchesField: [],
     ruleTargetsZone: [], sourceSupportsRule: [], sourceDefinesZone: [], effectPredictedBy: [], difficultyEffectPredictedBy: [],
@@ -381,6 +388,7 @@ async function collectRoguelikeKnowledge(
   paths: RepositoryPaths,
   battleMechanics: ReadonlyMap<string, BattleMechanicFacts>,
   semanticRules: readonly EngineSemanticRule[],
+  difficultyRules: readonly LocalDifficultyGraphRule[],
   topicSystemInterpretations: readonly TopicSystemInterpretation[],
 ): Promise<void> {
   const absolutePath = path.join(paths.gameData, "excel", "roguelike_topic_table.json");
@@ -389,8 +397,33 @@ async function collectRoguelikeKnowledge(
   const data = RoguelikeTopicTableSchema.parse(JSON.parse(content));
   const fieldIds = new Set(dataset.fields.map((field) => String(field.id)));
 
+  // 难度原文与科技启用关系来自同一 GameData；具体乘区只接受本地声明式规则。
+  const difficultyKnowledge = normalizeDifficultyKnowledge(data, difficultyRules);
+  dataset.difficulties.push(...difficultyKnowledge.difficulties.map((difficulty) => ({
+    ...difficulty,
+    grade: BigInt(difficulty.grade),
+  })));
+  dataset.difficultyEffects.push(...difficultyKnowledge.effects.map((effect) => ({
+    ...effect,
+    numericText: doubleText(effect.numericValue),
+  })));
+  dataset.difficultyTechnologies.push(...difficultyKnowledge.technologies.map((technology) => ({
+    ...technology,
+  })));
+  dataset.difficultyHasEffect.push(...difficultyKnowledge.difficultyHasEffect);
+  dataset.difficultyEffectPredictedBy.push(...difficultyKnowledge.difficultyEffectPredictedBy);
+  dataset.difficultyEffectEntersZone.push(...difficultyKnowledge.difficultyEffectEntersZone.map((edge) => ({
+    ...edge,
+    confidence: doubleText(edge.confidence),
+  })));
+  dataset.difficultyEnablesTechnology.push(...difficultyKnowledge.difficultyEnablesTechnology);
+  dataset.sourceContainsDifficulty.push(...difficultyKnowledge.difficulties.map((difficulty) => ({
+    from: sourceId,
+    to: difficulty.id,
+  })));
+
   for (const [topicId, detail] of Object.entries(data.details)) {
-    // 当前图谱版本导入藏品攻击力、防御力与最大生命事实；肉鸽难度等待后续按新 FormulaBook 单独重构。
+    // 藏品事实与难度事实保持两条独立关系链，避免 Mechanics 反向污染图谱。
     const itemIds = new Set<string>();
     for (const [rawId, item] of Object.entries(detail.items)) {
       const id = `item:${topicId}:${rawId}`;
@@ -608,6 +641,7 @@ async function collectRoguelikeKnowledge(
 async function collectDomainKnowledge(
   dataset: GraphDataset,
   semanticRules: readonly LocalGraphRule[],
+  difficultyRules: readonly LocalDifficultyGraphRule[],
   paths: RepositoryPaths,
 ): Promise<void> {
   const formulaBookPath = path.join(
@@ -642,7 +676,8 @@ async function collectDomainKnowledge(
   });
   const fieldIds = new Set<string>();
   const sourceByPath = new Map<string, string>();
-  const evidenceFiles = [...new Set(semanticRules.flatMap((rule) => rule.evidencePaths))]
+  const allRules = [...semanticRules, ...difficultyRules];
+  const evidenceFiles = [...new Set(allRules.flatMap((rule) => rule.evidencePaths))]
     .map((evidencePath) => evidencePath.split("#")[0] ?? "")
     .filter(Boolean);
   for (const evidencePath of evidenceFiles) {
@@ -656,7 +691,7 @@ async function collectDomainKnowledge(
       // 规则校验阶段会把不存在的证据路径列为冲突；这里不制造无来源节点。
     }
   }
-  for (const rule of semanticRules) {
+  for (const rule of allRules) {
     dataset.semanticRules.push({
       id: rule.id,
       version: BigInt(rule.version),
@@ -674,7 +709,8 @@ async function collectDomainKnowledge(
       const sourceId = sourceByPath.get(sourcePath);
       if (sourceId) dataset.sourceSupportsRule.push({ from: sourceId, to: rule.id, evidencePath });
     }
-    for (const fieldPath of rule.fieldPaths ?? []) {
+    const fieldPaths = "fieldPaths" in rule ? rule.fieldPaths ?? [] : [];
+    for (const fieldPath of fieldPaths) {
       const fieldId = `field:${fieldPath}`;
       if (!fieldIds.has(fieldId)) {
         fieldIds.add(fieldId);
@@ -707,6 +743,7 @@ async function writeDataset(connection: Connection, dataset: GraphDataset): Prom
     [dataset.items, "CREATE (n:Item {id: row.id, rawId: row.rawId, topic: row.topic, name: row.name, description: row.description, rarity: row.rarity, itemType: row.itemType, jsonPath: row.jsonPath})"],
     [dataset.difficulties, "CREATE (n:RogueDifficulty {id: row.id, topic: row.topic, modeDifficulty: row.modeDifficulty, grade: row.grade, name: row.name, ruleDesc: row.ruleDesc, classification: row.classification, unclassifiedReason: row.unclassifiedReason, jsonPath: row.jsonPath})"],
     [dataset.difficultyEffects, "CREATE (n:DifficultyEffect {id: row.id, matchedText: row.matchedText, numericValue: CAST(row.numericText AS DOUBLE), target: row.target, damageTypes: row.damageTypes, evidenceKind: row.evidenceKind, jsonPath: row.jsonPath})"],
+    [dataset.difficultyTechnologies, "CREATE (n:DifficultyTechnology {id: row.id, topic: row.topic, buffId: row.buffId, name: row.name, description: row.description, jsonPath: row.jsonPath})"],
     [dataset.effects, "CREATE (n:Effect {id: row.id, key: row.key, parameters: row.parameters, sourceKind: row.sourceKind, classification: row.classification, unclassifiedReason: row.unclassifiedReason, jsonPath: row.jsonPath})"],
     [dataset.parameters, "CREATE (n:Parameter {id: row.id, key: row.key, numericValue: CAST(row.numericValue AS DOUBLE), stringValue: row.stringValue, jsonPath: row.jsonPath})"],
     [dataset.fields, "CREATE (n:Field {id: row.id, path: row.path, description: row.description})"],
@@ -736,6 +773,7 @@ async function writeDataset(connection: Connection, dataset: GraphDataset): Prom
     [dataset.schemaDescribesField, "MATCH (a:SchemaDefinition {id: row.from}), (b:Field {id: row.to}) CREATE (a)-[:SCHEMA_DESCRIBES_FIELD]->(b)"],
     [dataset.itemHasEffect, "MATCH (a:Item {id: row.from}), (b:Effect {id: row.to}) CREATE (a)-[:ITEM_HAS_EFFECT]->(b)"],
     [dataset.difficultyHasEffect, "MATCH (a:RogueDifficulty {id: row.from}), (b:DifficultyEffect {id: row.to}) CREATE (a)-[:DIFFICULTY_HAS_EFFECT]->(b)"],
+    [dataset.difficultyEnablesTechnology, "MATCH (a:RogueDifficulty {id: row.from}), (b:DifficultyTechnology {id: row.to}) CREATE (a)-[:DIFFICULTY_ENABLES_TECHNOLOGY {buffId: row.buffId, evidencePath: row.evidencePath}]->(b)"],
     [dataset.difficultyHasConditionalItem, "MATCH (a:RogueDifficulty {id: row.from}), (b:Item {id: row.to}) CREATE (a)-[:DIFFICULTY_HAS_CONDITIONAL_ITEM {kind: row.kind, sourceItemId: row.sourceItemId, choiceId: row.choiceId, buffIndex: row.buffIndex, evidencePath: row.evidencePath}]->(b)"],
     [dataset.effectHasParameter, "MATCH (a:Effect {id: row.from}), (b:Parameter {id: row.to}) CREATE (a)-[:EFFECT_HAS_PARAMETER]->(b)"],
     [dataset.effectUsesMechanic, "MATCH (a:Effect {id: row.from}), (b:Mechanic {id: row.to}) CREATE (a)-[:EFFECT_USES_MECHANIC]->(b)"],
@@ -756,18 +794,20 @@ async function writeDataset(connection: Connection, dataset: GraphDataset): Prom
 /** 使用已经验证的本地规则构建一个指定 Kuzu 数据库。 */
 async function buildDatabase(
   semanticRules: readonly LocalGraphRule[],
+  difficultyRules: readonly LocalDifficultyGraphRule[],
   topicSystemInterpretations: readonly TopicSystemInterpretation[],
   databaseOverride?: string,
 ): Promise<BuildStatistics> {
   const paths = resolveRepositoryPaths(databaseOverride);
   const dataset = createDataset();
-  await collectDomainKnowledge(dataset, semanticRules, paths);
+  await collectDomainKnowledge(dataset, semanticRules, difficultyRules, paths);
   const battleMechanics = await collectBattleMechanics(dataset, paths);
   await collectRoguelikeKnowledge(
     dataset,
     paths,
     battleMechanics,
     semanticRules,
+    difficultyRules,
     topicSystemInterpretations,
   );
   await collectSchemaKnowledge(dataset, paths);
@@ -819,7 +859,7 @@ function assertSafePublishPath(paths: RepositoryPaths, target: string): void {
  */
 export async function buildKnowledgeGraph(databaseOverride?: string): Promise<BuildStatistics> {
   const paths = resolveRepositoryPaths(databaseOverride);
-  const { rules, conflicts } = await loadAndValidateLocalRules(databaseOverride);
+  const { rules, difficultyRules, conflicts } = await loadAndValidateLocalRules(databaseOverride);
   const topicValidation = await loadAndValidateTopicSystemInterpretations(databaseOverride);
   const allConflicts = [...conflicts, ...topicValidation.conflicts];
   if (allConflicts.length > 0) {
@@ -829,6 +869,7 @@ export async function buildKnowledgeGraph(databaseOverride?: string): Promise<Bu
       await rm(candidateInvalidPath, { recursive: true, force: true });
       const statistics = await buildDatabase(
         rules,
+        difficultyRules,
         topicValidation.interpretations,
         toRepositoryPath(paths.root, candidateInvalidPath),
       );
@@ -850,7 +891,7 @@ export async function buildKnowledgeGraph(databaseOverride?: string): Promise<Bu
     }
     throw new Error(`本地图谱解释存在 ${allConflicts.length} 个冲突，候选图谱不得发布：${allConflicts.join("；")}`);
   }
-  if (rules.length === 0) {
+  if (rules.length === 0 && difficultyRules.length === 0) {
     throw new Error(
       "本地声明式规则为空。请先运行 graph:prepare，并使用 $arknights-knowledge-graph-build 将人类知识、FormulaBook 与 GameData 关系解释为规则。",
     );
@@ -862,7 +903,12 @@ export async function buildKnowledgeGraph(databaseOverride?: string): Promise<Bu
   [paths.database, candidatePath, backupPath].forEach((target) => assertSafePublishPath(paths, target));
   await rm(candidatePath, { recursive: true, force: true });
   const candidateOverride = toRepositoryPath(paths.root, candidatePath);
-  const statistics = await buildDatabase(rules, topicValidation.interpretations, candidateOverride);
+  const statistics = await buildDatabase(
+    rules,
+    difficultyRules,
+    topicValidation.interpretations,
+    candidateOverride,
+  );
 
   // 关闭候选库后再移动目录，避免 Windows Kuzu 原生句柄阻止发布。
   await rm(backupPath, { recursive: true, force: true });

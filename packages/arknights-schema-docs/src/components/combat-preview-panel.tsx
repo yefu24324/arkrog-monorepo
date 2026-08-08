@@ -1,4 +1,4 @@
-/** 使用当前 FormulaBook 计算选中藏品下的干员与敌人属性。 */
+/** 使用当前 FormulaBook 计算选中难度与藏品下的干员、敌人属性。 */
 
 'use client';
 
@@ -8,6 +8,8 @@ import type {
   ExportedOperatorArtifact,
   ExportedOperatorIndex,
   ExportedOperatorIndexItem,
+  ExportedRogue6TopicExtReport,
+  ExportedRoguelikeTopicReport,
   OriginalGameDataObject,
   WrappedRelicItem,
 } from '@arkrog/arknights-gamedata-report';
@@ -19,8 +21,11 @@ import {
   type FormulaExpression,
 } from '@arkrog/arknights-knowledge-graph/formula';
 import {
+  applyDifficulty,
   applyRelics,
+  applyRogue6TopicSpec,
   type FormulaActivationContext,
+  type Rogue6TopicSpecSelection,
 } from '@arkrog/arknights-knowledge-graph/mechanics';
 import { RoguelikeStageSelector } from './roguelike-stage-selector';
 import { FormulaResultPopover } from './formula-expr-popover';
@@ -55,9 +60,13 @@ interface EnemyDetail extends EnemyIndexEntry {
   enemyData: Record<string, unknown>;
 }
 
-/** 属性预览接收当前启用藏品和主题证据路径。 */
+/** 属性预览接收当前难度、启用藏品和主题证据路径。 */
 interface CombatPreviewPanelProps {
   selectedRelics: readonly WrappedRelicItem[];
+  selectedDifficulty: ExportedRoguelikeTopicReport['difficulties'][number] | null;
+  rogue6TopicExt: ExportedRogue6TopicExtReport | null;
+  selectedRogue6TopicEffects: readonly Rogue6TopicSpecSelection[];
+  topicReport: ExportedRoguelikeTopicReport;
   topicId: string;
   zoneComments?: Readonly<Record<string, string>>;
   className?: string;
@@ -278,9 +287,13 @@ function EntityAttributePanel({
   );
 }
 
-/** 计算并展示当前藏品下的干员与敌人属性。 */
+/** 计算并展示当前难度与藏品下的干员、敌人属性。 */
 export function CombatPreviewPanel({
   selectedRelics,
+  selectedDifficulty,
+  rogue6TopicExt,
+  selectedRogue6TopicEffects,
+  topicReport,
   topicId,
   zoneComments,
   className,
@@ -441,10 +454,22 @@ export function CombatPreviewPanel({
         item('敌人基础法抗', enemyBaseMagicResistance),
       );
     }
-    applyRelics(selectedRelics, book, {
+    const activation = buildActivationContext(operator, enemy, stageOptions.selectedStage);
+    // 难度先写入环境贡献，藏品随后写入同一本 FormulaBook；两者共同参与最终属性。
+    applyDifficulty({
       topicId,
-      activation: buildActivationContext(operator, enemy, stageOptions.selectedStage),
-    });
+      report: topicReport,
+      selectedDifficulty,
+      activation,
+    }, book);
+    // rogue_6 三类主题效果与难度、藏品写入同一本公式书；主题入口不再处理难度。
+    if (topicId === 'rogue_6' && rogue6TopicExt) {
+      applyRogue6TopicSpec({
+        report: rogue6TopicExt,
+        selectedEffects: selectedRogue6TopicEffects,
+      }, book);
+    }
+    applyRelics(selectedRelics, book, { topicId, activation });
     // FormulaBook 只定义基础攻速与直接加成两个真实 zone，预览现场组合二者。
     const operatorAttackSpeedFormula = plus(
       book.get_zone(FormulaZoneId.char_base_attack_speed),
@@ -500,7 +525,17 @@ export function CombatPreviewPanel({
         ? undefined
         : book.get_zone(FormulaZoneId.enemy_final_magic_resist),
     };
-  }, [enemy, operator, selectedRelics, stageOptions.selectedStage, topicId]);
+  }, [
+    enemy,
+    operator,
+    rogue6TopicExt,
+    selectedDifficulty,
+    selectedRelics,
+    selectedRogue6TopicEffects,
+    stageOptions.selectedStage,
+    topicId,
+    topicReport,
+  ]);
 
   /** 干员攻击力、生命、攻速和防御力使用 FormulaBook，法抗仍读取原始属性帧。 */
   const operatorAttributes: PreviewAttribute[] = [
@@ -573,7 +608,7 @@ export function CombatPreviewPanel({
       <div className="mb-4">
         <h2 className="text-base font-semibold">属性预览</h2>
         <p className="mt-1 text-xs text-fd-muted-foreground">
-          选择区域、关卡、干员和敌人后，根据当前启用的藏品计算战斗属性。
+          选择区域、关卡、干员和敌人后，根据当前难度、主题效果与启用的藏品计算战斗属性。
         </p>
       </div>
       <RoguelikeStageSelector

@@ -74,10 +74,10 @@ gamedata-report/
 `rogue_6/topic_ext.json` 是专用精简结构，顶层只包含：
 
 - `realUtopia`：实托邦 `mainWeatherData` 的10类、每类早中晚3阶段完整效果，以及档案排序和解锁信息。
-- `utopia`：乌托邦 `portal` 场景、完整选项，以及9个战斗关卡的 Stage、主 Level 和替换 Level。
+- `utopia`：`variationData` 中9个乌托邦 Buff 及其档案关联，例如“巨人摇篮”。
 - `conceptualEntities`：6个概念体的完整 Item、`passiveScrapData` 效果和档案信息。
 
-当前数据为 `10 × 3`、9个乌托邦战斗关卡和6个概念体。生成器会按类别自动纳入未来新增对象，并严格校验阶段、场景、Item、档案和 Level 关联；任何关联缺失都会阻断生成。
+当前数据为 `10 × 3`、9个乌托邦 Buff 和6个概念体。生成器会按类别自动纳入未来新增对象，并严格校验阶段、Buff、Item 和档案关联；任何关联缺失都会阻断生成。
 
 报告 JSON 不写入 `schemaVersion` 或 `sources`。每类报告的数据来源由对应 `src/**/export-*.ts` 文件顶部的中文注释标明。
 

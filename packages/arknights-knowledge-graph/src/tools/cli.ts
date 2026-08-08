@@ -97,6 +97,7 @@ async function main(): Promise<void> {
     const conflicts = [...validation.conflicts, ...topicValidation.conflicts];
     console.log(JSON.stringify({
       ruleCount: validation.rules.length,
+      difficultyRuleCount: validation.difficultyRules.length,
       topicSystemInterpretationCount: topicValidation.interpretations.length,
       conflicts,
     }, null, 2));

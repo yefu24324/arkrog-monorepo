@@ -10,7 +10,7 @@
 
 ## 难度
 
-必须提供 `ExportedRoguelikeTopicReport`、所选 `DetailDifficulty`、主题 ID。`difficulties` 的 `modeDifficulty`、`grade` 和完整 `ruleDesc` 用于累计选择及版本护栏。条件藏品需要 report 保留完整来源链，并由用户显式传入启用关联 ID。
+必须提供 `ExportedRoguelikeTopicReport`、所选 `DetailDifficulty`、主题 ID。只有 `NORMAL` 进入静态分析和运行时；`grade` 和完整 `ruleDesc` 用于累计选择及版本护栏。`currentFloor` 可选，缺失时逐层倍率不默认第一层且不应用。难度入口不处理条件藏品，藏品始终由用户在藏品入口自行选择。
 
 ## 关卡
 
@@ -20,9 +20,9 @@ TODO：report 还需把以下原始对象整理成稳定、具名的数据模型
 
 ## 主题特殊系统
 
-`rogue_4`、`rogue_5` 入口接收通用 `ExportedRoguelikeTopicExtReport`。`rogue_6` 接收专用 `ExportedRogue6TopicExtReport`，只包含实托邦、乌托邦和概念体：实托邦保存10类三阶段原始效果，乌托邦保存 portal 场景、选项及完整战斗 Stage/Level，概念体保存 Item、触发效果与档案关联。
+`rogue_4`、`rogue_5` 入口接收通用 `ExportedRoguelikeTopicExtReport`。`rogue_6` 接收专用 `ExportedRogue6TopicExtReport`，只包含实托邦、乌托邦和概念体：实托邦保存10类三阶段原始效果，乌托邦保存 `variationData` 中9个 Buff，概念体保存 Item、触发效果与档案关联。
 
-TODO：report 仍需分别整理 `rogue_4` 萨卡兹年代/年代印痕、`rogue_5` 界园通宝/烛火/天象的稳定战斗关联。`rogue_6` 当前客户端数据只为实托邦和概念体提供效果文案与参数字段，没有额外黑板/模板引用；mechanics 必须保持原始证据边界，缺少结构化战斗语义时返回 `unknown`。
+TODO：report 仍需分别整理 `rogue_4` 萨卡兹年代/年代印痕、`rogue_5` 界园通宝/烛火/天象的稳定战斗关联。`rogue_6` 当前客户端数据只提供效果文案，没有额外黑板/模板引用；mechanics 仅处理文案中数值和目标都明确且能匹配现有 FormulaBook 的属性效果，其余保持 `unknown` 或 `not_applicable`。
 
 ## 通用约束
 

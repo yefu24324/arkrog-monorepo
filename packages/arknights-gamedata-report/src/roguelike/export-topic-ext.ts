@@ -10,7 +10,6 @@ import { characterBuffBelongsToRelic } from "#roguelike/wrapped-relics";
 import type {
   ExportedAnyRoguelikeTopicExtReport,
   ExportedRogue6TopicExtReport,
-  ExportedRogueStageReport,
   ExportedRoguelikeTopicExtReport,
   OriginalRelicCharacterBuffData,
   RoguelikeTopicTableForReport,
@@ -20,11 +19,9 @@ import type {
 export function buildTopicExtReport(
   table: RoguelikeTopicTableForReport,
   topicId: string,
-  stageReport?: ExportedRogueStageReport,
 ): ExportedAnyRoguelikeTopicExtReport {
   if (topicId === "rogue_6") {
-    if (!stageReport) throw new Error("rogue_6 topic_ext 需要完整 stage report 以导出乌托邦战斗数据");
-    return buildRogue6TopicExtReport(table, stageReport);
+    return buildRogue6TopicExtReport(table);
   }
   const detail = table.details[topicId]!;
   const {
@@ -60,15 +57,9 @@ export function buildTopicExtReport(
   };
 }
 
-/** 选择字典中满足稳定 ID 前缀的对象，并保留原始值。 */
-function selectByIdPrefix<T>(values: Record<string, T>, prefix: string): Record<string, T> {
-  return Object.fromEntries(Object.entries(values).filter(([id]) => id.startsWith(prefix)));
-}
-
 /** 构建黑流树海三类目标数据；数量或引用缺失时阻断生成。 */
 function buildRogue6TopicExtReport(
   table: RoguelikeTopicTableForReport,
-  stageReport: ExportedRogueStageReport,
 ): ExportedRogue6TopicExtReport {
   const detail = table.details.rogue_6!;
   const module = table.modules.rogue_6!;
@@ -94,16 +85,16 @@ function buildRogue6TopicExtReport(
     throw new Error("rogue_6 实托邦档案数据未完整关联全部阶段");
   }
 
-  const scenes = selectByIdPrefix(detail.choiceScenes, "scene_ro6_portal");
-  const choices = selectByIdPrefix(detail.choices, "choice_ro6_portal");
-  const battleStages = selectByIdPrefix(stageReport, "ro6_c_");
-  if (Object.keys(scenes).length === 0 || Object.keys(choices).length === 0 || Object.keys(battleStages).length === 0) {
-    throw new Error("rogue_6 乌托邦场景、选项或战斗关卡关联不完整");
+  const utopiaEffects = detail.variationData;
+  const utopiaArchive = Object.fromEntries(
+    Object.entries(detail.archiveComp.weather.weathers)
+      .filter(([effectId]) => effectId in utopiaEffects),
+  );
+  if (Object.keys(utopiaEffects).length === 0) {
+    throw new Error("rogue_6 未发现乌托邦 variationData");
   }
-  for (const choice of Object.values(choices)) {
-    if (choice.nextSceneId?.startsWith("scene_ro6_portal") && !scenes[choice.nextSceneId]) {
-      throw new Error(`rogue_6 乌托邦选项 ${choice.id} 引用了缺失场景 ${choice.nextSceneId}`);
-    }
+  if (Object.keys(utopiaArchive).length !== Object.keys(utopiaEffects).length) {
+    throw new Error("rogue_6 乌托邦档案数据未完整关联全部 Buff");
   }
 
   const conceptualEntityEntries = Object.fromEntries(
@@ -120,7 +111,7 @@ function buildRogue6TopicExtReport(
 
   return {
     realUtopia: { effects: realUtopiaEffects, archive: realUtopiaArchive },
-    utopia: { scenes, choices, battleStages },
+    utopia: { effects: utopiaEffects, archive: utopiaArchive },
     conceptualEntities: {
       type: module.scrap.scrapTypeData.PASSIVE,
       entries: conceptualEntityEntries,

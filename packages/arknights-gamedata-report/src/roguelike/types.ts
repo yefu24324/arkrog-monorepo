@@ -3,7 +3,6 @@ import type {
   ArchiveCompWeather,
   BuffElement,
   Choice,
-  ChoiceScene,
   CustomizeDatum,
   CustomizeDatumDifficulty,
   Detail,
@@ -14,6 +13,7 @@ import type {
   Item,
   Module,
   PassiveScrapDatum,
+  Rogue2__Mutation4,
   Stage,
   Topic,
 } from "@arkrog/arknights-schema/types";
@@ -185,14 +185,12 @@ export interface ExportedRogue6RealUtopiaData {
   archive: ArchiveCompWeather["weathers"];
 }
 
-/** 黑流树海乌托邦入口、选项和完整战斗关卡闭包。 */
+/** 黑流树海乌托邦 Buff 及档案关联。 */
 export interface ExportedRogue6UtopiaData {
-  /** `scene_ro6_portal*` 的完整场景字典。 */
-  scenes: Record<string, ChoiceScene>;
-  /** `choice_ro6_portal*` 的完整选项字典。 */
-  choices: Record<string, Choice>;
-  /** 乌托邦 `ro6_c_*` 关卡及其主 Level、替换 Level。 */
-  battleStages: ExportedRogueStageReport;
+  /** `details.rogue_6.variationData` 的九条完整原始效果。 */
+  effects: Record<string, Rogue2__Mutation4>;
+  /** 仅保留上述效果的档案排序与解锁信息。 */
+  archive: ArchiveCompWeather["weathers"];
 }
 
 /** 单个概念体的展示、机制和档案数据。 */

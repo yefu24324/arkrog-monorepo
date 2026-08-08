@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Search, X } from 'lucide-react';
 import type {
+  ExportedRogue6TopicExtReport,
   ExportedRelicsReport,
   ExportedRoguelikeTopicReport,
   WrappedRelicItem,
@@ -15,14 +16,25 @@ import {
   type MechanicsAnalysis,
 } from '@arkrog/arknights-knowledge-graph/mechanics';
 import { CombatPreviewPanel } from './combat-preview-panel';
+import { FormulaZoneBadges } from './formula-zone-badges';
+import { DifficultyZoneTable } from './roguelike-difficulty-table';
+import { Rogue6TopicEffectZoneTable } from './rogue6-topic-effect-table';
 import { cn } from '../lib/cn';
 import {
   collectFormulaZoneComments,
   loadFormulaBookPage,
 } from '../lib/formula-book-runtime';
-
-/** 无属性 zone 的筛选占位 ID。 */
-const ZONE_FILTER_NONE = '__none__';
+import {
+  buildNormalDifficultyRows,
+  difficultyMatchesSearch,
+  difficultyMatchesZones,
+  ZONE_FILTER_NONE,
+} from '../lib/roguelike-difficulties';
+import {
+  buildRogue6TopicEffectRows,
+  rogue6TopicEffectMatchesSearch,
+  rogue6TopicEffectMatchesZones,
+} from '../lib/rogue6-topic-effects';
 
 /** 单条原始 buff 的当前属性路由结果。 */
 interface RoutedRelicEffect {
@@ -131,32 +143,6 @@ function matchesZones(entry: RoutedRelicItem, selected: ReadonlySet<string>): bo
   return true;
 }
 
-/** 使用 FormulaZoneId 注释显示一个或多个属性 zone。 */
-function ZoneBadges({
-  zones,
-  comments,
-}: {
-  zones: readonly FormulaWritableZoneId[];
-  comments: Readonly<Record<string, string>>;
-}) {
-  if (zones.length === 0) {
-    return <span className="text-xs text-fd-muted-foreground">—</span>;
-  }
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {zones.map((zoneId) => (
-        <span
-          key={zoneId}
-          className="inline-flex flex-col rounded-lg border border-fd-primary/25 bg-fd-primary/5 px-2 py-1"
-        >
-          <span className="text-xs font-medium text-fd-primary">{comments[zoneId] ?? zoneId}</span>
-          <code className="text-[0.6rem] text-fd-muted-foreground">{zoneId}</code>
-        </span>
-      ))}
-    </div>
-  );
-}
-
 /** 分类状态中文标签。 */
 function classificationLabel(analyses: readonly MechanicsAnalysis[]): string {
   if (analyses.some((entry) => entry.status === 'supported')) return '已支持';
@@ -202,7 +188,7 @@ function EffectDetails({
               {summarizeBlackboard(effect) || '无黑板参数'}
             </p>
             <div className="mt-2">
-              <ZoneBadges zones={supported.map((analysis) => analysis.zoneId)} comments={comments} />
+              <FormulaZoneBadges zones={supported.map((analysis) => analysis.zoneId)} comments={comments} />
             </div>
             <p className="mt-2 text-xs leading-5 text-fd-muted-foreground">
               {supported.length > 0
@@ -291,7 +277,7 @@ function RelicRow({
         </td>
         <td className="px-3 py-3 text-fd-muted-foreground">{item.relic.usage || '—'}</td>
         <td className="px-3 py-3">
-          <ZoneBadges zones={entry.zones} comments={comments} />
+          <FormulaZoneBadges zones={entry.zones} comments={comments} />
         </td>
       </tr>
       {expanded ? (
@@ -308,6 +294,8 @@ function RelicRow({
 /** 属性藏品乘区表。 */
 export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
   const [wrappedRelics, setWrappedRelics] = useState<WrappedRelicItem[]>([]);
+  const [topicReport, setTopicReport] = useState<ExportedRoguelikeTopicReport | null>(null);
+  const [rogue6TopicExt, setRogue6TopicExt] = useState<ExportedRogue6TopicExtReport | null>(null);
   const [topicName, setTopicName] = useState(topicId);
   const [zoneComments, setZoneComments] = useState<Readonly<Record<string, string>>>({});
   const [loadState, setLoadState] = useState<TopicLoadState>({
@@ -319,6 +307,10 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
   const [selectedZoneIds, setSelectedZoneIds] = useState<string[]>([]);
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const [selectedRelicIds, setSelectedRelicIds] = useState<string[]>([]);
+  const [selectedDifficultyId, setSelectedDifficultyId] = useState('');
+  const [selectedRealUtopiaId, setSelectedRealUtopiaId] = useState('');
+  const [selectedUtopiaId, setSelectedUtopiaId] = useState('');
+  const [selectedConceptualEntityIds, setSelectedConceptualEntityIds] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -331,15 +323,29 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
         if (!response.ok) throw new Error(`topic HTTP ${response.status}`);
         return (await response.json()) as ExportedRoguelikeTopicReport;
       }),
+      topicId === 'rogue_6'
+        ? fetch('/gamedata-report/roguelike/rogue_6/topic_ext.json').then(async (response) => {
+          if (!response.ok) throw new Error(`topic_ext HTTP ${response.status}`);
+          return (await response.json()) as ExportedRogue6TopicExtReport;
+        })
+        : Promise.resolve(null),
       loadFormulaBookPage(),
-    ]).then(([relics, topicReport, formulaData]) => {
+    ]).then(([relics, topicReport, topicExt, formulaData]) => {
       if (cancelled) return;
       setWrappedRelics(relics);
+      setTopicReport(topicReport);
+      setRogue6TopicExt(topicExt);
       setTopicName(topicReport.topic.name);
       setZoneComments(collectFormulaZoneComments(formulaData));
       setSelectedZoneIds([]);
       setExpandedIds([]);
       setSelectedRelicIds([]);
+      setSelectedDifficultyId(
+        buildNormalDifficultyRows(topicReport, topicId, false)[0]?.id ?? '',
+      );
+      setSelectedRealUtopiaId('');
+      setSelectedUtopiaId('');
+      setSelectedConceptualEntityIds([]);
       setLoadState({ topicId, status: 'ready', error: null });
     }).catch((error: unknown) => {
       if (cancelled) return;
@@ -364,23 +370,82 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
     () => wrappedRelics.map((item) => routeWrappedRelic(item, topicId)),
     [topicId, wrappedRelics],
   );
+  const difficultyRows = useMemo(
+    () => topicReport ? buildNormalDifficultyRows(topicReport, topicId, true) : [],
+    [topicId, topicReport],
+  );
+  const topicEffectRows = useMemo(
+    () => rogue6TopicExt ? buildRogue6TopicEffectRows(rogue6TopicExt, true) : {
+      realUtopia: [],
+      utopia: [],
+      conceptualEntities: [],
+    },
+    [rogue6TopicExt],
+  );
   const availableZones = useMemo(
-    () => [...new Set(routedItems.flatMap((entry) => entry.zones))],
-    [routedItems],
+    () => [...new Set([
+      ...routedItems.flatMap((entry) => entry.zones),
+      ...difficultyRows.flatMap((entry) => entry.zones),
+      ...topicEffectRows.realUtopia.flatMap((entry) => entry.zones),
+      ...topicEffectRows.utopia.flatMap((entry) => entry.zones),
+      ...topicEffectRows.conceptualEntities.flatMap((entry) => entry.zones),
+    ])],
+    [difficultyRows, routedItems, topicEffectRows],
   );
   const selectedZones = useMemo(() => new Set(selectedZoneIds), [selectedZoneIds]);
   const expandedIdSet = useMemo(() => new Set(expandedIds), [expandedIds]);
   const selectedRelicIdSet = useMemo(() => new Set(selectedRelicIds), [selectedRelicIds]);
+  const selectedRealUtopiaIds = useMemo(
+    () => new Set(selectedRealUtopiaId ? [selectedRealUtopiaId] : []),
+    [selectedRealUtopiaId],
+  );
+  const selectedUtopiaIds = useMemo(
+    () => new Set(selectedUtopiaId ? [selectedUtopiaId] : []),
+    [selectedUtopiaId],
+  );
+  const selectedConceptualEntityIdSet = useMemo(
+    () => new Set(selectedConceptualEntityIds),
+    [selectedConceptualEntityIds],
+  );
   const normalizedQuery = query.trim().toLowerCase();
   const filtered = useMemo(
     () => routedItems.filter((entry) =>
       matchesSearch(entry, normalizedQuery) && matchesZones(entry, selectedZones)),
     [normalizedQuery, routedItems, selectedZones],
   );
+  const filteredDifficulties = useMemo(
+    () => difficultyRows.filter((row) =>
+      difficultyMatchesSearch(row, normalizedQuery, zoneComments)
+      && difficultyMatchesZones(row, selectedZones)),
+    [difficultyRows, normalizedQuery, selectedZones, zoneComments],
+  );
+  const filterTopicEffects = (rows: readonly (typeof topicEffectRows.realUtopia)[number][]) =>
+    rows.filter((row) => rogue6TopicEffectMatchesSearch(row, normalizedQuery, zoneComments)
+      && rogue6TopicEffectMatchesZones(row, selectedZones));
+  const filteredRealUtopia = filterTopicEffects(topicEffectRows.realUtopia);
+  const filteredUtopia = filterTopicEffects(topicEffectRows.utopia);
+  const filteredConceptualEntities = filterTopicEffects(topicEffectRows.conceptualEntities);
   const selectedRelics = useMemo(
     () => wrappedRelics.filter((item) => selectedRelicIdSet.has(item.id)),
     [selectedRelicIdSet, wrappedRelics],
   );
+  const selectedDifficulty = useMemo(
+    () => difficultyRows.find((row) => row.id === selectedDifficultyId)?.difficulty
+      ?? difficultyRows[0]?.difficulty
+      ?? null,
+    [difficultyRows, selectedDifficultyId],
+  );
+  const selectedTopicEffects = useMemo(() => [
+    ...topicEffectRows.realUtopia.filter((row) => row.id === selectedRealUtopiaId),
+    ...topicEffectRows.utopia.filter((row) => row.id === selectedUtopiaId),
+    ...topicEffectRows.conceptualEntities.filter((row) =>
+      selectedConceptualEntityIdSet.has(row.id)),
+  ].map((row) => row.selection), [
+    selectedConceptualEntityIdSet,
+    selectedRealUtopiaId,
+    selectedUtopiaId,
+    topicEffectRows,
+  ]);
   const allFilteredSelected = filtered.length > 0
     && filtered.every((entry) => selectedRelicIdSet.has(entry.item.id));
 
@@ -394,6 +459,13 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
   /** 切换单件藏品的公式计算选择。 */
   function toggleRelicSelected(itemId: string) {
     setSelectedRelicIds((previous) => previous.includes(itemId)
+      ? previous.filter((id) => id !== itemId)
+      : [...previous, itemId]);
+  }
+
+  /** 概念体允许多选，筛选隐藏时仍保留当前集合。 */
+  function toggleConceptualEntity(itemId: string) {
+    setSelectedConceptualEntityIds((previous) => previous.includes(itemId)
       ? previous.filter((id) => id !== itemId)
       : [...previous, itemId]);
   }
@@ -441,7 +513,11 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
     <div className={cn('not-prose my-4 space-y-4', className)}>
       <CombatPreviewPanel
         topicId={topicId}
+        topicReport={topicReport!}
+        selectedDifficulty={selectedDifficulty}
         selectedRelics={selectedRelics}
+        rogue6TopicExt={rogue6TopicExt}
+        selectedRogue6TopicEffects={selectedTopicEffects}
         zoneComments={zoneComments}
       />
 
@@ -450,7 +526,7 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
           <div>
             <h2 className="text-base font-semibold">{topicName}</h2>
             <p className="mt-1 text-xs text-fd-muted-foreground">
-              属性版本 · 显示 {filtered.length} / {routedItems.length} 件 · 已选 {selectedRelicIds.length} 件
+              属性版本 · 藏品 {filtered.length} / {routedItems.length} 件 · 难度 {filteredDifficulties.length} / {difficultyRows.length} 个{topicId === 'rogue_6' ? ` · 主题效果 ${filteredRealUtopia.length + filteredUtopia.length + filteredConceptualEntities.length} / ${topicEffectRows.realUtopia.length + topicEffectRows.utopia.length + topicEffectRows.conceptualEntities.length} 个` : ''} · 已选 {selectedRelicIds.length} 件藏品
             </p>
           </div>
           <label className="relative block w-full max-w-md">
@@ -458,7 +534,7 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="搜索藏品、buff、黑板或属性乘区…"
+              placeholder="搜索藏品、难度、主题效果、规则或属性乘区…"
               className="w-full rounded-xl border bg-fd-background py-2 pr-9 pl-9 text-sm outline-none focus:border-fd-primary"
             />
             {query ? (
@@ -553,6 +629,20 @@ export function RelicZoneTable({ topicId, className }: RelicZoneTableProps) {
           </table>
         </div>
       </div>
+
+      <DifficultyZoneTable
+        topicId={topicId}
+        rows={filteredDifficulties}
+        totalCount={difficultyRows.length}
+        selectedId={selectedDifficultyId}
+        comments={zoneComments}
+        onSelect={(row) => setSelectedDifficultyId(row.id)}
+      />
+      {rogue6TopicExt ? <>
+        <Rogue6TopicEffectZoneTable kind="realUtopia" rows={filteredRealUtopia} totalCount={topicEffectRows.realUtopia.length} selectedIds={selectedRealUtopiaIds} multiple={false} comments={zoneComments} onSelect={(row) => setSelectedRealUtopiaId(row.id)} onClear={() => setSelectedRealUtopiaId('')} />
+        <Rogue6TopicEffectZoneTable kind="utopia" rows={filteredUtopia} totalCount={topicEffectRows.utopia.length} selectedIds={selectedUtopiaIds} multiple={false} comments={zoneComments} onSelect={(row) => setSelectedUtopiaId(row.id)} onClear={() => setSelectedUtopiaId('')} />
+        <Rogue6TopicEffectZoneTable kind="conceptualEntity" rows={filteredConceptualEntities} totalCount={topicEffectRows.conceptualEntities.length} selectedIds={selectedConceptualEntityIdSet} multiple comments={zoneComments} onSelect={(row) => toggleConceptualEntity(row.id)} onClear={() => setSelectedConceptualEntityIds([])} />
+      </> : null}
     </div>
   );
 }

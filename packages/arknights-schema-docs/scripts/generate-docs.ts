@@ -863,10 +863,10 @@ function writeRelicZonePages(topics: RelicZoneTopicSummary[]): number {
     path.resolve(RELIC_ZONES_CONTENT_ROOT, "index.mdx"),
     `---
 title: 藏品乘区
-description: 按肉鸽主题选择难度，并浏览藏品原文、加成乘区与 buffs 原数据
+description: 按肉鸽主题选择难度与主题效果，并浏览藏品原文、加成乘区与 buffs 原数据
 ---
 
-由 \`pnpm graph:export\` 导出的 Kuzu graph 藏品乘区，与 Kuzu 同源难度规则共同驱动。难度表读取 GameData 报告的原始主题数据；无法由客户端事实验证的难度机制明确保留为 unknown。
+由 \`pnpm graph:export\` 导出的 Kuzu graph 藏品乘区，与 Mechanics 难度和主题效果程序共同驱动。难度表读取 GameData 报告的 NORMAL 难度；\`rogue_6\` 继续展示实托邦、乌托邦与概念体。单行只展示自身 Mechanics 属性乘区，暂不支持的结果显示为“-”。
 
 <Cards>
 ${cards || '  <Card title="暂无数据">请先运行 graph:export</Card>'}
@@ -933,7 +933,7 @@ title: 乘区校验
 description: 对照图谱结果、程序结果与人工维护的历史版本
 ---
 
-本目录用于对照 Graph、Mechanics 与人工维护的历史版本。Graph 读取 Kuzu 图谱直接发布的独立产物；Mechanics 由页面调用当前程序即时分析；历史版本保存在 \`public/human-zone-validation\`，由人工复制或下载后维护。本次只展示藏品，后续可扩展主题难度与特殊系统。
+本目录用于对照 Graph、Mechanics 与人工维护的历史版本。Graph 读取 Kuzu 图谱直接发布的独立产物；Mechanics 由页面调用当前程序即时分析；历史版本保存在 \`public/human-zone-validation\`，由人工复制或下载后维护。藏品执行完整三方校验；NORMAL 难度与 \`rogue_6\` 三类主题效果先展示 GameData 行，图谱、程序、历史与对照列保留“-”占位，后续补充分析功能。
 
 <Cards>
 ${cards || '  <Card title="暂无数据">请先显式准备 Graph 导出数据</Card>'}

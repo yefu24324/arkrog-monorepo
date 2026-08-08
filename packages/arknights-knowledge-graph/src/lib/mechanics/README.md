@@ -9,13 +9,13 @@
 - `analyze-stage.ts`：关卡效果；等待 report 完成稳定数据整理。
 - `analyze-rogue_4-topic-spec.ts`：萨卡兹年代和年代印痕。
 - `analyze-rogue_5-topic-spec.ts`：界园通宝、烛火和天象。
-- `analyze-rogue_6-topic-spec.ts`：黑流树理想域、天气和装置。
+- `analyze-rogue_6-topic-spec.ts`：黑流树海实托邦、乌托邦和概念体。
 
 主题特殊系统不共享入口。公开入口只负责查找、组合和调用程序，不包含具体机制逻辑。
 
 ## 生成程序
 
-`*-programs/` 按“GameData 机制类型与参数模式”复用程序，使用静态注册表，不在运行时扫描目录。只有无法归纳的对象才建立特例。生成程序及其同名 Markdown 都标记为 `AI_GENERATED`，可以被重新归纳、拆分、删除或重建；Markdown 只是代码索引和分析说明，不是证据。
+`difficulty-programs/program.ts` 是六主题 NORMAL 难度的唯一程序文件：普通词条来自已构建图谱，逐层倍率、低难度减益和服务器明确特例集中写死，不使用注册表或兼容层。其他 `*-programs/` 仍按“GameData 机制类型与参数模式”复用程序，不在运行时扫描目录。生成程序标记为 `AI_GENERATED`；说明 Markdown 只是代码索引，不是证据。
 
 未注册机制返回 `unknown`，不会回退到 `engine-rules` 猜测乘区。奖励、资源和商店等明确不进入 FormulaBook 的效果返回 `not_applicable`。
 
